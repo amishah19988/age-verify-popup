@@ -1,0 +1,23 @@
+{% comment %} Age Verification App Embed {% endcomment %}
+{% if shop.permanent_domain %}
+  <div id="age-verification-container"></div>
+
+  <div id="age-verification-modal">
+    <div id="age-verification-content">
+      <!-- JS will populate this content -->
+    </div>
+  </div>
+
+  <script src="{{ 'age-verification.js' | asset_url }}" defer></script>
+  <script>
+    window.ageVerificationShop = {{ shop.permanent_domain | json }};
+  </script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Age Verification Popup",
+  "target": "body",
+  "settings": []
+}
+{% endschema %}
