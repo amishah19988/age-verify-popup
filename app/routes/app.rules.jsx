@@ -1,9 +1,31 @@
 import { json } from '@remix-run/node';
 import { Form, useLoaderData, useActionData, useNavigation } from '@remix-run/react';
-import { Frame, Card, FormLayout, TextField, Button, Checkbox, Toast, Loading, Text, Layout, Page } from '@shopify/polaris';
+import { Card, FormLayout, TextField, Button, Toast, Text, Layout, Page, Spinner, Frame } from '@shopify/polaris';
+import { TitleBar } from '@shopify/app-bridge-react';
 import React, { useState, useEffect } from 'react';
 import { authenticate } from '../shopify.server';
 import prisma from '../db.server';
+import NavigationBar from './NavigationBar';
+
+// Define the full-screen loader component
+const MiFullScreenLoader = () => (
+  <div
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 2000,
+    }}
+  >
+    <Spinner accessibilityLabel="Loading" size="large" />
+  </div>
+);
 
 export const loader = async ({ request }) => {
   try {
@@ -82,16 +104,16 @@ export const action = async ({ request }) => {
   }
 
   let visibility = formData.get('visibility');
-  let pageUrls = [];
+  let miPageUrls = [];
 
-  const pageUrlsInput = formData.get('pageUrls');
-  if (pageUrlsInput) {
-    pageUrls = pageUrlsInput
+  const miPageUrlsInput = formData.get('pageUrls');
+  if (miPageUrlsInput) {
+    miPageUrls = miPageUrlsInput
       .split(/[,|\n]/)
       .map(url => url.trim())
       .filter(url => url.length > 0);
   }
-  if (visibility === 'specific' && pageUrls.length === 0) {
+  if (visibility === 'specific' && miPageUrls.length === 0) {
     return json({ error: 'Please provide at least one URL for specific pages' }, { status: 400 });
   }
   if (!visibility) {
@@ -103,12 +125,12 @@ export const action = async ({ request }) => {
       where: { shop },
       update: {
         visibility,
-        pageUrls,
+        pageUrls: miPageUrls,
       },
       create: {
         shop,
         visibility,
-        pageUrls,
+        pageUrls: miPageUrls,
       },
     });
 
@@ -120,42 +142,42 @@ export const action = async ({ request }) => {
 
 const Rules = () => {
   const { settings, shop, serialkey, error } = useLoaderData();
-  const actionData = useActionData();
-  const navigation = useNavigation();
+  const miActionData = useActionData();
+  const miNavigation = useNavigation();
 
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastError, setToastError] = useState(false);
-  const [accountForm, setAccountForm] = useState({ username: '', email: '' });
-  const [emailError, setEmailError] = useState('');
-  const [formData, setFormData] = useState({
+  const [miShowToast, miSetShowToast] = useState(false);
+  const [miToastMessage, miSetToastMessage] = useState('');
+  const [miToastError, miSetToastError] = useState(false);
+  const [miAccountForm, miSetAccountForm] = useState({ username: '', email: '' });
+  const [miEmailError, miSetEmailError] = useState('');
+  const [miFormData, miSetFormData] = useState({
     visibility: settings?.visibility || 'all',
     pageUrls: settings?.pageUrls?.join('\n') || '',
   });
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const miValidateEmail = (email) => {
+    const miEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
       return 'Email is required';
     }
-    if (!emailRegex.test(email)) {
+    if (!miEmailRegex.test(email)) {
       return 'Please enter a valid email address';
     }
     return '';
   };
 
-  const handleAccountChange = (field, value) => {
-    setAccountForm(prev => ({
+  const miHandleAccountChange = (field, value) => {
+    miSetAccountForm(prev => ({
       ...prev,
       [field]: value,
     }));
     if (field === 'email') {
-      setEmailError(validateEmail(value));
+      miSetEmailError(miValidateEmail(value));
     }
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => {
+  const miHandleChange = (field, value) => {
+    miSetFormData(prev => {
       if (field === 'visibility') {
         return {
           ...prev,
@@ -170,35 +192,56 @@ const Rules = () => {
   };
 
   useEffect(() => {
-    if (actionData && actionData.success && navigation.state === 'idle') {
-      setToastMessage(actionData.success || actionData.message);
-      setToastError(false);
-      setShowToast(true);
-      if (actionData.serialkey) {
-        setAccountForm({ username: '', email: '' });
-        setEmailError('');
+    if (miActionData && miActionData.success && miNavigation.state === 'idle') {
+      miSetToastMessage(miActionData.success || miActionData.message);
+      miSetToastError(false);
+      miSetShowToast(true);
+      if (miActionData.serialkey) {
+        miSetAccountForm({ username: '', email: '' });
+        miSetEmailError('');
       }
-    } else if (actionData && actionData.error && navigation.state === 'idle') {
-      setToastMessage(actionData.error);
-      setToastError(true);
-      setShowToast(true);
+    } else if (miActionData && miActionData.error && miNavigation.state === 'idle') {
+      miSetToastMessage(miActionData.error);
+      miSetToastError(true);
+      miSetShowToast(true);
     }
-  }, [actionData, navigation.state]);
+  }, [miActionData, miNavigation.state]);
 
-  const toastMarkup = showToast ? (
+  const miToastMarkup = miShowToast ? (
     <Toast
-      content={toastMessage}
-      error={toastError}
-      onDismiss={() => setShowToast(false)}
+      content={miToastMessage}
+      error={miToastError}
+      onDismiss={() => miSetShowToast(false)}
     />
   ) : null;
+
+  const isNavigating = miNavigation.state !== 'idle';
+
+  // Styles copied from AgeVerificationSettings.jsx
+  const fieldContainerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px',
+    backgroundColor: 'rgb(246, 246, 247)',
+    borderRadius: '5px',
+    marginBottom: '10px'
+  };
+
+  const fieldLabelStyle = {
+    fontSize: '14px',
+    color: 'rgb(51, 51, 51)',
+    margin: '0px'
+  };
 
   if (error) {
     return (
       <Frame>
         <Page>
+          <TitleBar title="Age Verification Rules" />
           <Layout>
             <Layout.Section>
+              <NavigationBar />
               <Card>
                 <Text variant="headingMd" as="h2" tone="critical">
                   Error Loading Rules
@@ -209,6 +252,7 @@ const Rules = () => {
               </Card>
             </Layout.Section>
           </Layout>
+          {isNavigating && <MiFullScreenLoader />}
         </Page>
       </Frame>
     );
@@ -218,8 +262,10 @@ const Rules = () => {
     return (
       <Frame>
         <Page>
+          <TitleBar title="Age Verification Rules" />
           <Layout>
             <Layout.Section>
+              <NavigationBar />
               <Card>
                 <Text variant="headingMd" as="h2">
                   Loading Rules...
@@ -227,6 +273,7 @@ const Rules = () => {
               </Card>
             </Layout.Section>
           </Layout>
+          {isNavigating && <MiFullScreenLoader />}
         </Page>
       </Frame>
     );
@@ -234,11 +281,12 @@ const Rules = () => {
 
   return (
     <Frame>
-      {navigation.state === 'submitting' && <Loading />}
-      {toastMarkup}
       <Page>
+        <TitleBar title="Age Verification Rules" />
+        {miToastMarkup}
         <Layout>
           <Layout.Section>
+            <NavigationBar />
             {!serialkey ? (
               <Card>
                 <Text variant="headingMd" as="h2">
@@ -250,41 +298,51 @@ const Rules = () => {
                 <Form method="post" style={{ marginTop: '20px' }}>
                   <input type="hidden" name="action" value="createAccount" />
                   <FormLayout>
-                    <TextField
-                      label="Username"
-                      name="username"
-                      value={accountForm.username}
-                      onChange={(value) => handleAccountChange('username', value)}
-                      autoComplete="off"
-                      placeholder="Enter username"
-                      required
-                    />
-                    <TextField
-                      label="Email"
-                      type="email"
-                      name="email"
-                      value={accountForm.email}
-                      onChange={(value) => handleAccountChange('email', value)}
-                      autoComplete="email"
-                      placeholder="Enter email"
-                      required
-                      error={emailError}
-                    />
-                    {actionData?.error && !actionData.serialkey && (
+                    <div style={fieldContainerStyle}>
+                      <img src="/UsrAccount.svg" alt="Username Icon" style={{ width: '48px', height: '48px' }} />
+                      <div style={{ flex: '1 1 0%' }}>
+                        <p style={fieldLabelStyle}>Username</p>
+                        <TextField
+                          name="username"
+                          value={miAccountForm.username}
+                          onChange={(value) => miHandleAccountChange('username', value)}
+                          autoComplete="off"
+                          placeholder="Enter username"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div style={fieldContainerStyle}>
+                      <img src="/Mail.svg" alt="Email Icon" style={{ width: '48px', height: '48px' }} />
+                      <div style={{ flex: '1 1 0%' }}>
+                        <p style={fieldLabelStyle}>Email</p>
+                        <TextField
+                          type="email"
+                          name="email"
+                          value={miAccountForm.email}
+                          onChange={(value) => miHandleAccountChange('email', value)}
+                          autoComplete="email"
+                          placeholder="Enter email"
+                          required
+                          error={miEmailError}
+                        />
+                      </div>
+                    </div>
+                    {miActionData?.error && !miActionData.serialkey && (
                       <Text as="p" tone="critical">
-                        {actionData.error}
+                        {miActionData.error}
                       </Text>
                     )}
                     <Button
                       primary
                       submit
                       disabled={
-                        !accountForm.username ||
-                        !accountForm.email ||
-                        !!emailError ||
-                        navigation.state === 'submitting'
+                        !miAccountForm.username ||
+                        !miAccountForm.email ||
+                        !!miEmailError ||
+                        miNavigation.state === 'submitting'
                       }
-                      loading={navigation.state === 'submitting'}
+                      loading={miNavigation.state === 'submitting'}
                     >
                       Create Account
                     </Button>
@@ -301,26 +359,44 @@ const Rules = () => {
                     <input
                       type="hidden"
                       name="visibility"
-                      value={formData.visibility}
+                      value={miFormData.visibility}
                     />
-                    <Checkbox
-                      label="All Pages"
-                      checked={formData.visibility === 'all'}
-                      onChange={() => handleChange('visibility', 'all')}
-                      helpText="Enable to show age verification popup for all pages."
-                    />
-                    <Checkbox
-                      label="Specific Pages"
-                      checked={formData.visibility === 'specific'}
-                      onChange={() => handleChange('visibility', 'specific')}
-                      helpText="Enable to show age verification popup for specific pages."
-                    />
-                    {formData.visibility === 'specific' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img
+                          src={miFormData.visibility === 'all' ? '/enabled.svg' : '/disabled.svg'}
+                          alt="All Pages Toggle"
+                          style={{ cursor: 'pointer', width: '40px', height: '40px' }}
+                          onClick={() => miHandleChange('visibility', 'all')}
+                        />
+                        <div>
+                          <Text as="p">All Pages</Text>
+                          <Text as="p" tone="subdued">
+                            Enable to show age verification popup for all pages.
+                          </Text>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img
+                          src={miFormData.visibility === 'specific' ? '/enabled.svg' : '/disabled.svg'}
+                          alt="Specific Pages Toggle"
+                          style={{ cursor: 'pointer', width: '40px', height: '40px' }}
+                          onClick={() => miHandleChange('visibility', 'specific')}
+                        />
+                        <div>
+                          <Text as="p">Specific Pages</Text>
+                          <Text as="p" tone="subdued">
+                            Enable to show age verification popup for specific pages.
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                    {miFormData.visibility === 'specific' && (
                       <TextField
                         label="Page URLs"
                         name="pageUrls"
-                        value={formData.pageUrls}
-                        onChange={(value) => handleChange('pageUrls', value)}
+                        value={miFormData.pageUrls}
+                        onChange={(value) => miHandleChange('pageUrls', value)}
                         multiline={4}
                         helpText="Enter URLs one per line. You have to include full URLs (e.g., https://example.com/products)."
                         placeholder="https://example.com/products"
@@ -329,10 +405,10 @@ const Rules = () => {
                     <Button
                       primary
                       submit
-                      loading={navigation.state === 'submitting'}
-                      disabled={navigation.state === 'submitting'}
+                      loading={miNavigation.state === 'submitting'}
+                      disabled={miNavigation.state === 'submitting'}
                     >
-                      {navigation.state === 'submitting' ? 'Saving...' : 'Save Rules'}
+                      {miNavigation.state === 'submitting' ? 'Saving...' : 'Save Rules'}
                     </Button>
                   </FormLayout>
                 </Form>
@@ -340,6 +416,7 @@ const Rules = () => {
             )}
           </Layout.Section>
         </Layout>
+        {isNavigating && <MiFullScreenLoader />}
       </Page>
     </Frame>
   );

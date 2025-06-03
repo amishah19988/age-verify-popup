@@ -1,16 +1,37 @@
 import { json } from '@remix-run/node';
 import { Form, useLoaderData, useActionData, useNavigation } from '@remix-run/react';
-import { Frame, Page, Layout, Card, FormLayout, TextField, Button, Select, Toast, Text } from '@shopify/polaris';
+import { Frame, Page, Layout, Card, FormLayout, TextField, Button, Select, Toast, Text, Collapsible, Spinner } from '@shopify/polaris';
+import { TitleBar } from '@shopify/app-bridge-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { authenticate } from '../shopify.server';
 import prisma from '../db.server';
-import { TitleBar } from '@shopify/app-bridge-react';
+import NavigationBar from './NavigationBar';
 
-const colorFieldStyles = (color) => ({
+// Define the full-screen loader component
+const MiFullScreenLoader = () => (
+  <div
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      background: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 2000,
+    }}
+  >
+    <Spinner accessibilityLabel="Loading" size="large" />
+  </div>
+);
+
+const miColorFieldStyles = (color) => ({
   backgroundColor: color,
   borderRadius: '4px',
   overflow: 'hidden',
-  padding: '4px',
+  padding: '10px',
 });
 
 export const loader = async ({ request }) => {
@@ -50,7 +71,6 @@ export const action = async ({ request }) => {
     const formData = await request.formData();
     const actionType = formData.get("action");
 
-    // Handle account creation
     if (actionType === "createAccount") {
       const username = formData.get("username");
       const email = formData.get("email");
@@ -62,8 +82,8 @@ export const action = async ({ request }) => {
         );
       }
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      const miEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!miEmailRegex.test(email)) {
         return json(
           { error: "Please enter a valid email address", serialkey: null },
           { status: 400 }
@@ -94,7 +114,6 @@ export const action = async ({ request }) => {
       return json({ success: "Account created successfully", serialkey }, { status: 200 });
     }
 
-    // Handle settings update
     const settingsData = {
       serialKey: formData.get("serialKey"),
       status: formData.get("status"),
@@ -124,45 +143,42 @@ export const action = async ({ request }) => {
       shop,
     };
 
-    // Validation
-    const errors = {};
-    if (!settingsData.buttonLabelLeft) errors.buttonLabelLeft = 'Button Label Left is required';
-    if (!settingsData.buttonLabelRight) errors.buttonLabelRight = 'Button Label Right is required';
-    if (!settingsData.popupTitle) errors.popupTitle = 'Popup Title is required';
-    if (!settingsData.contentSubtitle) errors.contentSubtitle = 'Content Subtitle is required';
+    const miErrors = {};
+    if (!settingsData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
+    if (!settingsData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
+    if (!settingsData.popupTitle) miErrors.popupTitle = 'Popup Title is required';
+    if (!settingsData.contentSubtitle) miErrors.contentSubtitle = 'Content Subtitle is required';
 
     if (settingsData.verificationType === 'checkbox') {
-      if (!settingsData.linkTitle) errors.linkTitle = 'Link Title is required';
-      if (!settingsData.anchorText) errors.anchorText = 'Anchor Text is required';
-      if (!settingsData.anchorUrl) errors.anchorUrl = 'Anchor URL is required';
+      if (!settingsData.linkTitle) miErrors.linkTitle = 'Link Title is required';
+      if (!settingsData.anchorText) miErrors.anchorText = 'Anchor Text is required';
+      if (!settingsData.anchorUrl) miErrors.anchorUrl = 'Anchor URL is required';
     }
 
     if (settingsData.underAgeNoticeType === 'show_message' && !settingsData.underAgeMessage) {
-      errors.underAgeMessage = 'Under-Age Message is required';
+      miErrors.underAgeMessage = 'Under-Age Message is required';
     }
     if (settingsData.underAgeNoticeType === 'redirect_url' && !settingsData.redirectUrl) {
-      errors.redirectUrl = 'Redirect URL is required';
+      miErrors.redirectUrl = 'Redirect URL is required';
     }
 
-    if (Object.keys(errors).length > 0) {
-      return json({ errors }, { status: 400 });
+    if (Object.keys(miErrors).length > 0) {
+      return json({ errors: miErrors }, { status: 400 });
     }
 
-    // Handle iconImage file upload
     let iconImage = null;
-    const iconImageFile = formData.get('iconImage');
-    if (iconImageFile && iconImageFile instanceof File && iconImageFile.size > 0) {
+    const miIconImageFile = formData.get('iconImage');
+    if (miIconImageFile && miIconImageFile instanceof File && miIconImageFile.size > 0) {
       try {
-        const arrayBuffer = await iconImageFile.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        iconImage = `data:${iconImageFile.type};base64,${buffer.toString('base64')}`;
+        const miArrayBuffer = await miIconImageFile.arrayBuffer();
+        const miBuffer = Buffer.from(miArrayBuffer);
+        iconImage = `data:${miIconImageFile.type};base64,${miBuffer.toString('base64')}`;
         settingsData.iconImage = iconImage;
       } catch (error) {
         return json({ error: 'Failed to process image' }, { status: 400 });
       }
     }
 
-    // Check if settings exist, then either update or create
     const existingSettings = await prisma.ageVerificationSettings.findFirst({
       where: { shop },
     });
@@ -186,18 +202,26 @@ export const action = async ({ request }) => {
 
 const AgeVerificationSettings = () => {
   const { settings, shop, serialkey, error } = useLoaderData();
-  const actionData = useActionData();
-  const navigation = useNavigation();
+  const miActionData = useActionData();
+  const miNavigation = useNavigation();
 
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastError, setToastError] = useState(false);
-  const [fileName, setFileName] = useState('No file chosen');
-  const [accountForm, setAccountForm] = useState({ username: '', email: '' });
-  const [emailError, setEmailError] = useState('');
-  const [formErrors, setFormErrors] = useState({});
+  const [miShowToast, miSetShowToast] = useState(false);
+  const [miToastMessage, miSetToastMessage] = useState('');
+  const [miToastError, miSetToastError] = useState(false);
+  const [miFileName, miSetFileName] = useState('No file chosen');
+  const [miAccountForm, miSetAccountForm] = useState({ username: '', email: '' });
+  const [miEmailError, miSetEmailError] = useState('');
+  const [miFormErrors, miSetFormErrors] = useState({});
 
-  const [formData, setFormData] = useState({
+  // State for collapsible sections
+  const [miConfigurationOpen, miSetConfigurationOpen] = useState(true);
+  const [miAnchorTextOpen, miSetAnchorTextOpen] = useState(false);
+  const [miButtonSettingsOpen, miSetButtonSettingsOpen] = useState(false);
+  const [miPopupSettingsOpen, miSetPopupSettingsOpen] = useState(false);
+  const [miUnderAgeSettingsOpen, miSetUnderAgeSettingsOpen] = useState(false);
+  const [miIconImageOpen, miSetIconImageOpen] = useState(false);
+
+  const [miFormData, miSetFormData] = useState({
     serialKey: serialkey || settings?.serialKey || '',
     status: settings?.status || 'enable',
     ageLimit: settings?.ageLimit?.toString() || '18',
@@ -225,144 +249,135 @@ const AgeVerificationSettings = () => {
     cookieLifetime: settings?.cookieLifetime?.toString() || '30',
   });
 
-  const textColorPickerRef = useRef(null);
-  const buttonLeftBackgroundColorPickerRef = useRef(null);
-  const buttonLeftTextColorPickerRef = useRef(null);
-  const buttonRightBackgroundColorPickerRef = useRef(null);
-  const buttonRightTextColorPickerRef = useRef(null);
-  const headerBackgroundColorPickerRef = useRef(null);
-  const bodyBackgroundColorPickerRef = useRef(null);
-  const contentTitleColorPickerRef = useRef(null);
-  const contentSubtitleColorPickerRef = useRef(null);
+  const miTextColorPickerRef = useRef(null);
+  const miButtonLeftBackgroundColorPickerRef = useRef(null);
+  const miButtonLeftTextColorPickerRef = useRef(null);
+  const miButtonRightBackgroundColorPickerRef = useRef(null);
+  const miButtonRightTextColorPickerRef = useRef(null);
+  const miHeaderBackgroundColorPickerRef = useRef(null);
+  const miBodyBackgroundColorPickerRef = useRef(null);
+  const miContentTitleColorPickerRef = useRef(null);
+  const miContentSubtitleColorPickerRef = useRef(null);
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const miValidateEmail = (email) => {
+    const miEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
       return 'Email is required';
     }
-    if (!emailRegex.test(email)) {
+    if (!miEmailRegex.test(email)) {
       return 'Please enter a valid email address';
     }
     return '';
   };
 
-  const validateForm = () => {
-    const errors = {};
+  const miValidateForm = () => {
+    const miErrors = {};
 
-    // Always required fields
-    if (!formData.buttonLabelLeft) errors.buttonLabelLeft = 'Button Label Left is required';
-    if (!formData.buttonLabelRight) errors.buttonLabelRight = 'Button Label Right is required';
-    if (!formData.popupTitle) errors.popupTitle = 'Popup Title is required';
-    if (!formData.contentSubtitle) errors.contentSubtitle = 'Content Subtitle is required';
+    if (!miFormData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
+    if (!miFormData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
+    if (!miFormData.popupTitle) miErrors.popupTitle = 'Popup Title is required';
+    if (!miFormData.contentSubtitle) miErrors.contentSubtitle = 'Content Subtitle is required';
 
-    // Conditionally required fields for verificationType === 'checkbox'
-    if (formData.verificationType === 'checkbox') {
-      if (!formData.linkTitle) errors.linkTitle = 'Link Title is required';
-      if (!formData.anchorText) errors.anchorText = 'Anchor Text is required';
-      if (!formData.anchorUrl) errors.anchorUrl = 'Anchor URL is required';
+    if (miFormData.verificationType === 'checkbox') {
+      if (!miFormData.linkTitle) miErrors.linkTitle = 'Link Title is required';
+      if (!miFormData.anchorText) miErrors.anchorText = 'Anchor Text is required';
+      if (!miFormData.anchorUrl) miErrors.anchorUrl = 'Anchor URL is required';
     }
 
-    // Conditionally required fields for underAgeNoticeType
-    if (formData.underAgeNoticeType === 'show_message' && !formData.underAgeMessage) {
-      errors.underAgeMessage = 'Under-Age Message is required';
+    if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage) {
+      miErrors.underAgeMessage = 'Under-Age Message is required';
     }
-    if (formData.underAgeNoticeType === 'redirect_url' && !formData.redirectUrl) {
-      errors.redirectUrl = 'Redirect URL is required';
+    if (miFormData.underAgeNoticeType === 'redirect_url' && !miFormData.redirectUrl) {
+      miErrors.redirectUrl = 'Redirect URL is required';
     }
 
-    return errors;
+    return miErrors;
   };
 
-  const handleAccountChange = (field, value) => {
-    setAccountForm(prev => ({
+  const miHandleAccountChange = (field, value) => {
+    miSetAccountForm(prev => ({
       ...prev,
       [field]: value,
     }));
     if (field === 'email') {
-      setEmailError(validateEmail(value));
+      miSetEmailError(miValidateEmail(value));
     }
   };
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
+  const miHandleChange = (field, value) => {
+    miSetFormData(prev => ({
       ...prev,
       [field]: value,
     }));
-    // Clear error for the field when user starts typing
-    setFormErrors(prev => ({
+    miSetFormErrors(prev => ({
       ...prev,
       [field]: '',
     }));
   };
 
-  const handleColorChange = (event) => {
+  const miHandleColorChange = (event) => {
     const { name, value } = event.target;
-    setFormData(prev => ({
+    miSetFormData(prev => ({
       ...prev,
-      [name]: value, // Fixed: Changed 'field' to 'name'
+      [name]: value,
     }));
-    setFormErrors(prev => ({
+    miSetFormErrors(prev => ({
       ...prev,
       [name]: '',
     }));
   };
 
   useEffect(() => {
-    if (actionData && actionData.success && navigation.state === 'idle') {
-      setToastMessage(actionData.success);
-      setToastError(false);
-      setShowToast(true);
-      setFormErrors({});
-      if (actionData.serialkey) {
-        setFormData(prev => ({ ...prev, serialKey: actionData.serialkey }));
-        setAccountForm({ username: '', email: '' });
-        setEmailError('');
+    if (miActionData && miActionData.success && miNavigation.state === 'idle') {
+      miSetToastMessage(miActionData.success);
+      miSetToastError(false);
+      miSetShowToast(true);
+      miSetFormErrors({});
+      if (miActionData.serialkey) {
+        miSetFormData(prev => ({ ...prev, serialKey: miActionData.serialkey }));
+        miSetAccountForm({ username: '', email: '' });
+        miSetEmailError('');
       }
-    } else if (actionData && actionData.errors && navigation.state === 'idle') {
-      setFormErrors(actionData.errors);
-      setToastMessage('Please fill in all required fields');
-      setToastError(true);
-      setShowToast(true);
-    } else if (actionData && actionData.error && navigation.state === 'idle') {
-      setToastMessage(actionData.error);
-      setToastError(true);
-      setShowToast(true);
+    } else if (miActionData && miActionData.errors && miNavigation.state === 'idle') {
+      miSetFormErrors(miActionData.errors);
+      miSetToastMessage('Please fill in all required fields');
+      miSetToastError(true);
+      miSetShowToast(true);
+    } else if (miActionData && miActionData.error && miNavigation.state === 'idle') {
+      miSetToastMessage(miActionData.error);
+      miSetToastError(true);
+      miSetShowToast(true);
     }
-  }, [actionData, navigation.state]);
+  }, [miActionData, miNavigation.state]);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    setFileName(file ? file.name : 'No file chosen');
+  const miHandleFileChange = (event) => {
+    const miFile = event.target.files[0];
+    miSetFileName(miFile ? miFile.name : 'No file chosen');
   };
 
-  const openColorPicker = (colorPickerRef) => {
-    if (colorPickerRef.current) {
-      colorPickerRef.current.click();
-    }
-  };
-
-  const handleSubmit = (event) => {
-    const errors = validateForm();
-    if (Object.keys(errors).length > 0) {
+  const miHandleSubmit = (event) => {
+    const miErrors = miValidateForm();
+    if (Object.keys(miErrors).length > 0) {
       event.preventDefault();
-      setFormErrors(errors);
-      setToastMessage('Please fill in all required fields');
-      setToastError(true);
-      setShowToast(true);
+      miSetFormErrors(miErrors);
+      miSetToastMessage('Please fill in all required fields');
+      miSetToastError(true);
+      miSetShowToast(true);
     }
   };
 
-  const toastMarkup = showToast ? (
+  const miToastMarkup = miShowToast ? (
     <Toast
-      content={toastMessage}
-      error={toastError}
-      onDismiss={() => setShowToast(false)}
+      content={miToastMessage}
+      error={miToastError}
+      onDismiss={() => miSetShowToast(false)}
     />
   ) : null;
 
-  const showAnchorFields = formData.verificationType === 'checkbox';
-  const showUnderAgeMessage = formData.underAgeNoticeType === 'show_message';
-  const showRedirectUrl = formData.underAgeNoticeType === 'redirect_url';
+  const miShowAnchorFields = miFormData.verificationType === 'checkbox';
+  const miShowUnderAgeMessage = miFormData.underAgeNoticeType === 'show_message';
+  const miShowRedirectUrl = miFormData.underAgeNoticeType === 'redirect_url';
+  const isNavigating = miNavigation.state !== 'idle';
 
   if (error) {
     return (
@@ -371,6 +386,7 @@ const AgeVerificationSettings = () => {
           <TitleBar title="Age Verification Settings" />
           <Layout>
             <Layout.Section>
+              <NavigationBar />
               <Card title="Error" sectioned>
                 <Text variant="headingMd" as="h2" tone="critical">
                   Error Loading Settings
@@ -381,6 +397,7 @@ const AgeVerificationSettings = () => {
               </Card>
             </Layout.Section>
           </Layout>
+          {isNavigating && <MiFullScreenLoader />}
         </Page>
       </Frame>
     );
@@ -393,6 +410,7 @@ const AgeVerificationSettings = () => {
           <TitleBar title="Age Verification Settings" />
           <Layout>
             <Layout.Section>
+              <NavigationBar />
               <Card title="Loading" sectioned>
                 <Text variant="headingMd" as="h2">
                   Loading Settings...
@@ -400,18 +418,73 @@ const AgeVerificationSettings = () => {
               </Card>
             </Layout.Section>
           </Layout>
+          {isNavigating && <MiFullScreenLoader />}
         </Page>
       </Frame>
     );
   }
 
+  const fieldContainerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px',
+    backgroundColor: 'rgb(246, 246, 247)',
+    borderRadius: '5px',
+    marginBottom: '10px'
+  };
+
+  const fieldLabelStyle = {
+    fontSize: '14px',
+    color: 'rgb(51, 51, 51)',
+    margin: '0px'
+  };
+
+  const fieldInputStyle = {
+    width: '100%',
+    padding: '10px',
+    border: '1px solid rgb(223, 227, 232)',
+    borderRadius: '4px',
+    fontSize: '14px',
+    background: 'white'
+  };
+
+  const colorPickerStyle = {
+    width: '32px',
+    height: '32px',
+    border: '1px solid #767676',
+    padding: '0',
+    background: 'none'
+  };
+
+  const sectionHeaderStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px',
+    cursor: 'pointer',
+    backgroundColor: '#f4f6f8',
+    borderRadius: '4px',
+    marginBottom: '10px'
+  };
+
+  const iconStyle = {
+    width: '20px',
+    height: '20px'
+  };
+
+  const sectionWrapperStyle = {
+    marginBottom: '20px'
+  };
+
   return (
     <Frame>
       <Page>
         <TitleBar title="Age Verification Settings" />
-        {toastMarkup}
+        {miToastMarkup}
         <Layout>
           <Layout.Section>
+            <NavigationBar />
             {!serialkey ? (
               <Card title="No Account Found" sectioned>
                 <Text variant="headingMd" as="h2">
@@ -423,42 +496,52 @@ const AgeVerificationSettings = () => {
                 <Form method="post" style={{ marginTop: '20px' }}>
                   <input type="hidden" name="action" value="createAccount" />
                   <FormLayout>
-                    <TextField
-                      label="Username"
-                      name="username"
-                      value={accountForm.username}
-                      onChange={(value) => handleAccountChange('username', value)}
-                      autoComplete="off"
-                      placeholder="Enter username"
-                      required
-                      error={formErrors.username}
-                    />
-                    <TextField
-                      label="Email"
-                      type="email"
-                      name="email"
-                      value={accountForm.email}
-                      onChange={(value) => handleAccountChange('email', value)}
-                      autoComplete="email"
-                      placeholder="Enter email"
-                      required
-                      error={emailError || formErrors.email}
-                    />
-                    {actionData?.error && !actionData.serialkey && (
+                    <div style={fieldContainerStyle}>
+                      <img src="/UsrAccount.svg" alt="Username Icon" style={{ width: '48px', height: '48px' }} />
+                      <div style={{ flex: '1 1 0%' }}>
+                        <p style={fieldLabelStyle}>Username</p>
+                        <TextField
+                          name="username"
+                          value={miAccountForm.username}
+                          onChange={(value) => miHandleAccountChange('username', value)}
+                          autoComplete="off"
+                          placeholder="Enter username"
+                          required
+                          error={miFormErrors.username}
+                        />
+                      </div>
+                    </div>
+                    <div style={fieldContainerStyle}>
+                      <img src="/Mail.svg" alt="Email Icon" style={{ width: '48px', height: '48px' }} />
+                      <div style={{ flex: '1 1 0%' }}>
+                        <p style={fieldLabelStyle}>Email</p>
+                        <TextField
+                          type="email"
+                          name="email"
+                          value={miAccountForm.email}
+                          onChange={(value) => miHandleAccountChange('email', value)}
+                          autoComplete="email"
+                          placeholder="Enter email"
+                          required
+                          error={miEmailError || miFormErrors.email}
+                        />
+                      </div>
+                    </div>
+                    {miActionData?.error && !miActionData.serialkey && (
                       <Text as="p" tone="critical">
-                        {actionData.error}
+                        {miActionData.error}
                       </Text>
                     )}
                     <Button
                       primary
                       submit
                       disabled={
-                        !accountForm.username ||
-                        !accountForm.email ||
-                        !!emailError ||
-                        navigation.state === 'submitting'
+                        !miAccountForm.username ||
+                        !miAccountForm.email ||
+                        !!miEmailError ||
+                        miNavigation.state === 'submitting'
                       }
-                      loading={navigation.state === 'submitting'}
+                      loading={miNavigation.state === 'submitting'}
                     >
                       Create Account
                     </Button>
@@ -467,371 +550,555 @@ const AgeVerificationSettings = () => {
               </Card>
             ) : (
               <Card title="Age Verification Settings" sectioned>
-                <Form method="post" encType="multipart/form-data" onSubmit={handleSubmit}>
+                <Form method="post" encType="multipart/form-data" onSubmit={miHandleSubmit}>
                   <FormLayout>
-                    <div>
-                      <TextField
-                        label="Serial Key"
-                        name="serialKey"
-                        value={formData.serialKey}
-                        onChange={(value) => handleChange('serialKey', value)}
-                        autoComplete="off"
-                        placeholder="Enter serial key"
-                        error={formErrors.serialKey}
-                        readOnly
-                      />
-                    </div>
-                    <Select
-                      label="Age Verification"
-                      name="status"
-                      options={[
-                        { label: 'Enable', value: 'enable' },
-                        { label: 'Disable', value: 'disable' },
-                      ]}
-                      value={formData.status}
-                      onChange={(value) => handleChange('status', value)}
-                      error={formErrors.status}
-                    />
-                    <TextField
-                      label="Age Limit"
-                      type="number"
-                      name="ageLimit"
-                      value={formData.ageLimit}
-                      onChange={(value) => handleChange('ageLimit', value)}
-                      min="1"
-                      error={formErrors.ageLimit}
-                    />
-                    <TextField
-                      label="Cookie Lifetime (in days)"
-                      type="number"
-                      name="cookieLifetime"
-                      value={formData.cookieLifetime}
-                      onChange={(value) => handleChange('cookieLifetime', value)}
-                      min="1"
-                      placeholder="Enter number of days (e.g., 30)"
-                      error={formErrors.cookieLifetime}
-                    />
-                    <Select
-                      label="Verification Type"
-                      name="verificationType"
-                      options={[
-                        { label: 'Checkbox', value: 'checkbox' },
-                        { label: 'Yes/No', value: 'yesno' },
-                        { label: 'Date Of Birth', value: 'dateofbirth' },
-                      ]}
-                      value={formData.verificationType}
-                      onChange={(value) => handleChange('verificationType', value)}
-                      error={formErrors.verificationType}
-                    />
-                    {showAnchorFields && (
-                      <>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <TextField
-                            label="Link Title"
-                            name="linkTitle"
-                            value={formData.linkTitle}
-                            onChange={(value) => handleChange('linkTitle', value)}
-                            required
-                            error={formErrors.linkTitle}
-                          />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <TextField
-                            label="Anchor Text"
-                            name="anchorText"
-                            value={formData.anchorText}
-                            onChange={(value) => handleChange('anchorText', value)}
-                            required
-                            error={formErrors.anchorText}
-                          />
-                        </div>
-                        <div style={{ marginBottom: '1rem' }}>
-                          <TextField
-                            label="Anchor URL"
-                            name="anchorUrl"
-                            value={formData.anchorUrl}
-                            onChange={(value) => handleChange('anchorUrl', value)}
-                            required
-                            error={formErrors.anchorUrl}
-                          />
-                        </div>
-                        <div style={{ ...colorFieldStyles(formData.textColor), marginBottom: '1rem' }}>
-                          <TextField
-                            label="Anchor Text Color"
-                            name="textColor"
-                            value={formData.textColor}
-                            onChange={(value) => handleChange('textColor', value)}
-                            connectedRight={
-                              <input
-                                type="color"
-                                ref={textColorPickerRef}
-                                name="textColor"
-                                value={formData.textColor}
-                                onChange={handleColorChange}
-                                style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                              />
-                            }
-                            error={formErrors.textColor}
-                          />
-                        </div>
-                      </>
-                    )}
-                    <TextField
-                      label="Button Label Left"
-                      name="buttonLabelLeft"
-                      value={formData.buttonLabelLeft}
-                      onChange={(value) => handleChange('buttonLabelLeft', value)}
-                      required
-                      error={formErrors.buttonLabelLeft}
-                    />
-                    <div style={colorFieldStyles(formData.buttonLeftBackgroundColor)}>
-                      <TextField
-                        label="Button Left Background Color"
-                        name="buttonLeftBackgroundColor"
-                        value={formData.buttonLeftBackgroundColor}
-                        onChange={(value) => handleChange('buttonLeftBackgroundColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={buttonLeftBackgroundColorPickerRef}
-                            name="buttonLeftBackgroundColor"
-                            value={formData.buttonLeftBackgroundColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.buttonLeftBackgroundColor}
-                      />
-                    </div>
-                    <div style={colorFieldStyles(formData.buttonLeftTextColor)}>
-                      <TextField
-                        label="Button Left Text Color"
-                        name="buttonLeftTextColor"
-                        value={formData.buttonLeftTextColor}
-                        onChange={(value) => handleChange('buttonLeftTextColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={buttonLeftTextColorPickerRef}
-                            name="buttonLeftTextColor"
-                            value={formData.buttonLeftTextColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.buttonLeftTextColor}
-                      />
-                    </div>
-                    <TextField
-                      label="Button Label Right"
-                      name="buttonLabelRight"
-                      value={formData.buttonLabelRight}
-                      onChange={(value) => handleChange('buttonLabelRight', value)}
-                      required
-                      error={formErrors.buttonLabelRight}
-                    />
-                    <div style={colorFieldStyles(formData.buttonRightBackgroundColor)}>
-                      <TextField
-                        label="Button Right Background Color"
-                        name="buttonRightBackgroundColor"
-                        value={formData.buttonRightBackgroundColor}
-                        onChange={(value) => handleChange('buttonRightBackgroundColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={buttonRightBackgroundColorPickerRef}
-                            name="buttonRightBackgroundColor"
-                            value={formData.buttonRightBackgroundColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.buttonRightBackgroundColor}
-                      />
-                    </div>
-                    <div style={colorFieldStyles(formData.buttonRightTextColor)}>
-                      <TextField
-                        label="Button Right Text Color"
-                        name="buttonRightTextColor"
-                        value={formData.buttonRightTextColor}
-                        onChange={(value) => handleChange('buttonRightTextColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={buttonRightTextColorPickerRef}
-                            name="buttonRightTextColor"
-                            value={formData.buttonRightTextColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.buttonRightTextColor}
-                      />
-                    </div>
-                    <TextField
-                      label="Popup Title"
-                      name="popupTitle"
-                      value={formData.popupTitle}
-                      onChange={(value) => handleChange('popupTitle', value)}
-                      required
-                      error={formErrors.popupTitle}
-                    />
-                    <div style={colorFieldStyles(formData.headerBackgroundColor)}>
-                      <TextField
-                        label="Header Background Color"
-                        name="headerBackgroundColor"
-                        value={formData.headerBackgroundColor}
-                        onChange={(value) => handleChange('headerBackgroundColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={headerBackgroundColorPickerRef}
-                            name="headerBackgroundColor"
-                            value={formData.headerBackgroundColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.headerBackgroundColor}
-                      />
-                    </div>
-                    <div style={colorFieldStyles(formData.bodyBackgroundColor)}>
-                      <TextField
-                        label="Body Background Color"
-                        name="bodyBackgroundColor"
-                        value={formData.bodyBackgroundColor}
-                        onChange={(value) => handleChange('bodyBackgroundColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={bodyBackgroundColorPickerRef}
-                            name="bodyBackgroundColor"
-                            value={formData.bodyBackgroundColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.bodyBackgroundColor}
-                      />
-                    </div>
-                    <TextField
-                      label="Content Title"
-                      name="contentTitle"
-                      value={formData.contentTitle}
-                      onChange={(value) => handleChange('contentTitle', value)}
-                      error={formErrors.contentTitle}
-                    />
-                    <div style={colorFieldStyles(formData.contentTitleColor)}>
-                      <TextField
-                        label="Content Title Color"
-                        name="contentTitleColor"
-                        value={formData.contentTitleColor}
-                        onChange={(value) => handleChange('contentTitleColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={contentTitleColorPickerRef}
-                            name="contentTitleColor"
-                            value={formData.contentTitleColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.contentTitleColor}
-                      />
-                    </div>
-                    <TextField
-                      label="Content Subtitle"
-                      name="contentSubtitle"
-                      value={formData.contentSubtitle}
-                      onChange={(value) => handleChange('contentSubtitle', value)}
-                      multiline={4}
-                      required
-                      error={formErrors.contentSubtitle}
-                    />
-                    <div style={colorFieldStyles(formData.contentSubtitleColor)}>
-                      <TextField
-                        label="Content Subtitle Color"
-                        name="contentSubtitleColor"
-                        value={formData.contentSubtitleColor}
-                        onChange={(value) => handleChange('contentSubtitleColor', value)}
-                        connectedRight={
-                          <input
-                            type="color"
-                            ref={contentSubtitleColorPickerRef}
-                            name="contentSubtitleColor"
-                            value={formData.contentSubtitleColor}
-                            onChange={handleColorChange}
-                            style={{ width: 32, height: 32, border: '1px solid #767676', padding: 0, background: 'none' }}
-                          />
-                        }
-                        error={formErrors.contentSubtitleColor}
-                      />
-                    </div>
-                    <Select
-                      label="Under-Age Notice Type"
-                      name="underAgeNoticeType"
-                      options={[
-                        { label: 'Show Message', value: 'show_message' },
-                        { label: 'Redirect URL', value: 'redirect_url' },
-                      ]}
-                      value={formData.underAgeNoticeType}
-                      onChange={(value) => handleChange('underAgeNoticeType', value)}
-                      error={formErrors.underAgeNoticeType}
-                    />
-                    {showUnderAgeMessage && (
-                      <TextField
-                        label="Under-Age Message"
-                        name="underAgeMessage"
-                        value={formData.underAgeMessage}
-                        onChange={(value) => handleChange('underAgeMessage', value)}
-                        multiline={4}
-                        placeholder="Enter message for under-age users"
-                        required
-                        error={formErrors.underAgeMessage}
-                      />
-                    )}
-                    {showRedirectUrl && (
-                      <TextField
-                        label="Redirect URL"
-                        name="redirectUrl"
-                        value={formData.redirectUrl}
-                        onChange={(value) => handleChange('redirectUrl', value)}
-                        placeholder="Enter redirect URL for under-age users"
-                        required
-                        error={formErrors.redirectUrl}
-                      />
-                    )}
-                    <div>
-                      <label style={{ marginBottom: '8px', display: 'block' }}>Icon Image</label>
-                      <input
-                        type="file"
-                        name="iconImage"
-                        id="iconImage"
-                        accept="image/jpeg,image/png,image/gif"
-                        onChange={handleFileChange}
-                      />
-                      <div style={{ marginTop: '4px', color: '#6d7175', fontSize: '12px' }}>
-                        Choose the icon to upload (JPEG, GIF, PNG).
+                    {/* Configuration Section */}
+                    <div style={sectionWrapperStyle}>
+                      <div style={sectionHeaderStyle} onClick={() => miSetConfigurationOpen(!miConfigurationOpen)}>
+                        <Text variant="headingSm" as="h3">Configuration</Text>
+                        <img
+                          src={miConfigurationOpen ? '/Up.svg' : '/Down.svg'}
+                          alt={miConfigurationOpen ? 'Collapse' : 'Expand'}
+                          style={iconStyle}
+                        />
                       </div>
-                      <span>{fileName}</span>
-                      {settings && settings.iconImage && (
-                        <div style={{ marginTop: '8px' }}>
+                      <Collapsible open={miConfigurationOpen} id="configuration-collapsible">
+                        <div style={fieldContainerStyle}>
+                          <img src="/serial.svg" alt="Serial Key Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Serial Key</p>
+                            <TextField
+                              name="serialKey"
+                              value={miFormData.serialKey}
+                              onChange={(value) => miHandleChange('serialKey', value)}
+                              autoComplete="off"
+                              placeholder="Enter serial key"
+                              error={miFormErrors.serialKey}
+                              readOnly
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/enable.svg" alt="Status Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Age Verification</p>
+                            <Select
+                              name="status"
+                              options={[
+                                { label: 'Enable', value: 'enable' },
+                                { label: 'Disable', value: 'disable' },
+                              ]}
+                              value={miFormData.status}
+                              onChange={(value) => miHandleChange('status', value)}
+                              error={miFormErrors.status}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/agelimit.svg" alt="Age Limit Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Age Limit</p>
+                            <TextField
+                              type="number"
+                              name="ageLimit"
+                              value={miFormData.ageLimit}
+                              onChange={(value) => miHandleChange('ageLimit', value)}
+                              min="1"
+                              error={miFormErrors.ageLimit}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/cookie.svg" alt="Cookie Lifetime Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Cookie Lifetime (in days)</p>
+                            <TextField
+                              type="number"
+                              name="cookieLifetime"
+                              value={miFormData.cookieLifetime}
+                              onChange={(value) => miHandleChange('cookieLifetime', value)}
+                              min="1"
+                              placeholder="Enter number of days (e.g., 30)"
+                              error={miFormErrors.cookieLifetime}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/verify.svg" alt="Verification Type Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Verification Type</p>
+                            <Select
+                              name="verificationType"
+                              options={[
+                                { label: 'Checkbox', value: 'checkbox' },
+                                { label: 'Yes/No', value: 'yesno' },
+                                { label: 'Date Of Birth', value: 'dateofbirth' },
+                              ]}
+                              value={miFormData.verificationType}
+                              onChange={(value) => miHandleChange('verificationType', value)}
+                              error={miFormErrors.verificationType}
+                            />
+                          </div>
+                        </div>
+                      </Collapsible>
+                    </div>
+
+                    {/* Anchor Text Section */}
+                    {miShowAnchorFields && (
+                      <div style={sectionWrapperStyle}>
+                        <div style={sectionHeaderStyle} onClick={() => miSetAnchorTextOpen(!miAnchorTextOpen)}>
+                          <Text variant="headingSm" as="h3">Anchor Text</Text>
                           <img
-                            src={settings.iconImage}
-                            alt="Icon Preview"
-                            style={{ maxWidth: '200px' }}
+                            src={miAnchorTextOpen ? '/Up.svg' : '/Down.svg'}
+                            alt={miAnchorTextOpen ? 'Collapse' : 'Expand'}
+                            style={iconStyle}
                           />
                         </div>
-                      )}
+                        <Collapsible open={miAnchorTextOpen} id="anchor-text-collapsible">
+                          <div style={fieldContainerStyle}>
+                            <img src="/linktext.svg" alt="Link Title Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Link Title</p>
+                              <TextField
+                                name="linkTitle"
+                                value={miFormData.linkTitle}
+                                onChange={(value) => miHandleChange('linkTitle', value)}
+                                required
+                                error={miFormErrors.linkTitle}
+                              />
+                            </div>
+                          </div>
+                          <div style={fieldContainerStyle}>
+                            <img src="/linktext.svg" alt="Anchor Text Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Anchor Text</p>
+                              <TextField
+                                name="anchorText"
+                                value={miFormData.anchorText}
+                                onChange={(value) => miHandleChange('anchorText', value)}
+                                required
+                                error={miFormErrors.anchorText}
+                              />
+                            </div>
+                          </div>
+                          <div style={fieldContainerStyle}>
+                            <img src="/url.svg" alt="Anchor URL Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Anchor URL</p>
+                              <TextField
+                                name="anchorUrl"
+                                value={miFormData.anchorUrl}
+                                onChange={(value) => miHandleChange('anchorUrl', value)}
+                                required
+                                error={miFormErrors.anchorUrl}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.textColor) }}>
+                            <img src="/textcolor.svg" alt="Anchor Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Anchor Text Color</p>
+                              <TextField
+                                name="textColor"
+                                value={miFormData.textColor}
+                                onChange={(value) => miHandleChange('textColor', value)}
+                                connectedRight={
+                                  <input
+                                    type="color"
+                                    ref={miTextColorPickerRef}
+                                    name="textColor"
+                                    value={miFormData.textColor}
+                                    onChange={miHandleColorChange}
+                                    style={colorPickerStyle}
+                                  />
+                                }
+                                error={miFormErrors.textColor}
+                              />
+                            </div>
+                          </div>
+                        </Collapsible>
+                      </div>
+                    )}
+
+                    {/* Button Settings Section */}
+                    <div style={sectionWrapperStyle}>
+                      <div style={sectionHeaderStyle} onClick={() => miSetButtonSettingsOpen(!miButtonSettingsOpen)}>
+                        <Text variant="headingSm" as="h3">Button Settings</Text>
+                        <img
+                          src={miButtonSettingsOpen ? '/Up.svg' : '/Down.svg'}
+                          alt={miButtonSettingsOpen ? 'Collapse' : 'Expand'}
+                          style={iconStyle}
+                        />
+                      </div>
+                      <Collapsible open={miButtonSettingsOpen} id="button-settings-collapsible">
+                        <div style={fieldContainerStyle}>
+                          <img src="/left.svg" alt="Button Label Left Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Label Left</p>
+                            <TextField
+                              name="buttonLabelLeft"
+                              value={miFormData.buttonLabelLeft}
+                              onChange={(value) => miHandleChange('buttonLabelLeft', value)}
+                              required
+                              error={miFormErrors.buttonLabelLeft}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonLeftBackgroundColor) }}>
+                          <img src="/textcolor.svg" alt="Button Left Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Left Background Color</p>
+                            <TextField
+                              name="buttonLeftBackgroundColor"
+                              value={miFormData.buttonLeftBackgroundColor}
+                              onChange={(value) => miHandleChange('buttonLeftBackgroundColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miButtonLeftBackgroundColorPickerRef}
+                                  name="buttonLeftBackgroundColor"
+                                  value={miFormData.buttonLeftBackgroundColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.buttonLeftBackgroundColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonLeftTextColor) }}>
+                          <img src="/textcolor.svg" alt="Button Left Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Left Text Color</p>
+                            <TextField
+                              name="buttonLeftTextColor"
+                              value={miFormData.buttonLeftTextColor}
+                              onChange={(value) => miHandleChange('buttonLeftTextColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miButtonLeftTextColorPickerRef}
+                                  name="buttonLeftTextColor"
+                                  value={miFormData.buttonLeftTextColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.buttonLeftTextColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/right.svg" alt="Button Label Right Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Label Right</p>
+                            <TextField
+                                name="buttonLabelRight"
+                                value={miFormData.buttonLabelRight}
+                                onChange={(value) => miHandleChange('buttonLabelRight', value)}
+                                required
+                                error={miFormErrors.buttonLabelRight}
+                              />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonRightBackgroundColor) }}>
+                          <img src="/textcolor.svg" alt="Button Right Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Right Background Color</p>
+                            <TextField
+                              name="buttonRightBackgroundColor"
+                              value={miFormData.buttonRightBackgroundColor}
+                              onChange={(value) => miHandleChange('buttonRightBackgroundColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miButtonRightBackgroundColorPickerRef}
+                                  name="buttonRightBackgroundColor"
+                                  value={miFormData.buttonRightBackgroundColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.buttonRightBackgroundColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonRightTextColor) }}>
+                          <img src="/textcolor.svg" alt="Button Right Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Button Right Text Color</p>
+                            <TextField
+                              name="buttonRightTextColor"
+                              value={miFormData.buttonRightTextColor}
+                              onChange={(value) => miHandleChange('buttonRightTextColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miButtonRightTextColorPickerRef}
+                                  name="buttonRightTextColor"
+                                  value={miFormData.buttonRightTextColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.buttonRightTextColor}
+                            />
+                          </div>
+                        </div>
+                      </Collapsible>
                     </div>
+
+                    {/* Popup Settings Section */}
+                    <div style={sectionWrapperStyle}>
+                      <div style={sectionHeaderStyle} onClick={() => miSetPopupSettingsOpen(!miPopupSettingsOpen)}>
+                        <Text variant="headingSm" as="h3">Popup Settings</Text>
+                        <img
+                          src={miPopupSettingsOpen ? '/Up.svg' : '/Down.svg'}
+                          alt={miPopupSettingsOpen ? 'Collapse' : 'Expand'}
+                          style={iconStyle}
+                        />
+                      </div>
+                      <Collapsible open={miPopupSettingsOpen} id="popup-settings-collapsible">
+                        <div style={fieldContainerStyle}>
+                          <img src="/linktext.svg" alt="Popup Title Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Popup Title</p>
+                            <TextField
+                              name="popupTitle"
+                              value={miFormData.popupTitle}
+                              onChange={(value) => miHandleChange('popupTitle', value)}
+                              required
+                              error={miFormErrors.popupTitle}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.headerBackgroundColor) }}>
+                          <img src="/textcolor.svg" alt="Header Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Header Background Color</p>
+                            <TextField
+                              name="headerBackgroundColor"
+                              value={miFormData.headerBackgroundColor}
+                              onChange={(value) => miHandleChange('headerBackgroundColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miHeaderBackgroundColorPickerRef}
+                                  name="headerBackgroundColor"
+                                  value={miFormData.headerBackgroundColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.headerBackgroundColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.bodyBackgroundColor) }}>
+                          <img src="/textcolor.svg" alt="Body Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Body Background Color</p>
+                            <TextField
+                              name="bodyBackgroundColor"
+                              value={miFormData.bodyBackgroundColor}
+                              onChange={(value) => miHandleChange('bodyBackgroundColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miBodyBackgroundColorPickerRef}
+                                  name="bodyBackgroundColor"
+                                  value={miFormData.bodyBackgroundColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.bodyBackgroundColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/linktext.svg" alt="Content Title Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Content Title</p>
+                            <TextField
+                              name="contentTitle"
+                              value={miFormData.contentTitle}
+                              onChange={(value) => miHandleChange('contentTitle', value)}
+                              error={miFormErrors.contentTitle}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.contentTitleColor) }}>
+                          <img src="/textcolor.svg" alt="Content Title Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Content Title Color</p>
+                            <TextField
+                              name="contentTitleColor"
+                              value={miFormData.contentTitleColor}
+                              onChange={(value) => miHandleChange('contentTitleColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miContentTitleColorPickerRef}
+                                  name="contentTitleColor"
+                                  value={miFormData.contentTitleColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.contentTitleColor}
+                            />
+                          </div>
+                        </div>
+                        <div style={fieldContainerStyle}>
+                          <img src="/linktext.svg" alt="Content Subtitle Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Content Subtitle</p>
+                            <TextField
+                              name="contentSubtitle"
+                              value={miFormData.contentSubtitle}
+                              onChange={(value) => miHandleChange('contentSubtitle', value)}
+                              multiline={4}
+                              required
+                              error={miFormErrors.contentSubtitle}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.contentSubtitleColor) }}>
+                          <img src="/textcolor.svg" alt="Content Subtitle Color Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Content Subtitle Color</p>
+                            <TextField
+                              name="contentSubtitleColor"
+                              value={miFormData.contentSubtitleColor}
+                              onChange={(value) => miHandleChange('contentSubtitleColor', value)}
+                              connectedRight={
+                                <input
+                                  type="color"
+                                  ref={miContentSubtitleColorPickerRef}
+                                  name="contentSubtitleColor"
+                                  value={miFormData.contentSubtitleColor}
+                                  onChange={miHandleColorChange}
+                                  style={colorPickerStyle}
+                                />
+                              }
+                              error={miFormErrors.contentSubtitleColor}
+                            />
+                          </div>
+                        </div>
+                      </Collapsible>
+                    </div>
+
+                    {/* Under Age Notice Settings Section */}
+                    <div style={sectionWrapperStyle}>
+                      <div style={sectionHeaderStyle} onClick={() => miSetUnderAgeSettingsOpen(!miUnderAgeSettingsOpen)}>
+                        <Text variant="headingSm" as="h3">Under Age Notice Settings</Text>
+                        <img
+                          src={miUnderAgeSettingsOpen ? '/Up.svg' : '/Down.svg'}
+                          alt={miUnderAgeSettingsOpen ? 'Collapse' : 'Expand'}
+                          style={iconStyle}
+                        />
+                      </div>
+                      <Collapsible open={miUnderAgeSettingsOpen} id="under-age-settings-collapsible">
+                        <div style={fieldContainerStyle}>
+                          <img src="/notice.svg" alt="Under-Age Notice Type Icon" style={{ width: '48px', height: '48px' }} />
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Under-Age Notice Type</p>
+                            <Select
+                                name="underAgeNoticeType"
+                                options={[
+                                  { label: 'Show Message', value: 'show_message' },
+                                  { label: 'Redirect URL', value: 'redirect_url' },
+                                ]}
+                                value={miFormData.underAgeNoticeType}
+                                onChange={(value) => miHandleChange('underAgeNoticeType', value)}
+                                error={miFormErrors.underAgeNoticeType}
+                              />
+                          </div>
+                        </div>
+                        {miShowUnderAgeMessage && (
+                          <div style={fieldContainerStyle}>
+                            <img src="/linktext.svg" alt="Under-Age Message Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Under-Age Message</p>
+                              <TextField
+                                name="underAgeMessage"
+                                value={miFormData.underAgeMessage}
+                                onChange={(value) => miHandleChange('underAgeMessage', value)}
+                                multiline={4}
+                                placeholder="Enter message for under-age users"
+                                required
+                                error={miFormErrors.underAgeMessage}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {miShowRedirectUrl && (
+                          <div style={fieldContainerStyle}>
+                            <img src="/linktext.svg" alt="Redirect URL Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: '1 1 0%' }}>
+                              <p style={fieldLabelStyle}>Redirect URL</p>
+                              <TextField
+                                name="redirectUrl"
+                                value={miFormData.redirectUrl}
+                                onChange={(value) => miHandleChange('redirectUrl', value)}
+                                placeholder="Enter redirect URL for under-age users"
+                                required
+                                error={miFormErrors.redirectUrl}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </Collapsible>
+                    </div>
+
+                    {/* Icon Image Section */}
+                    <div style={sectionWrapperStyle}>
+                      <div style={sectionHeaderStyle} onClick={() => miSetIconImageOpen(!miIconImageOpen)}>
+                        <Text variant="headingSm" as="h3">Icon Image</Text>
+                        <img
+                          src={miIconImageOpen ? '/Up.svg' : '/Down.svg'}
+                          alt={miIconImageOpen ? 'Collapse' : 'Expand'}
+                          style={iconStyle}
+                        />
+                      </div>
+                      <Collapsible open={miIconImageOpen} id="icon-image-collapsible">
+                        <div style={fieldContainerStyle}>
+                          <div style={{ flex: '1 1 0%' }}>
+                            <p style={fieldLabelStyle}>Icon Image</p>
+                            <input
+                              type="file"
+                              name="iconImage"
+                              id="iconImage"
+                              accept="image/jpeg,image/png,image/gif"
+                              onChange={miHandleFileChange}
+                              style={fieldInputStyle}
+                            />
+                            <div style={{ marginTop: '4px', color: '#6d7175', fontSize: '12px' }}>
+                              Choose the icon to upload (JPEG, GIF, PNG).
+                            </div>
+                            <span>{miFileName}</span>
+                            {settings && settings.iconImage && (
+                              <div style={{ marginTop: '8px' }}>
+                                <img
+                                  src={settings.iconImage}
+                                  alt="Icon Preview"
+                                  style={{ maxWidth: '200px' }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Collapsible>
+                    </div>
+
                     <Button
                       primary
                       submit
-                      loading={navigation.state === 'submitting'}
-                      disabled={navigation.state === 'submitting'}
+                      loading={miNavigation.state === 'submitting'}
+                      disabled={miNavigation.state === 'submitting'}
                     >
-                      {navigation.state === "submitting" ? "Saving..." : "Save Settings"}
+                      {miNavigation.state === "submitting" ? "Saving..." : "Save Settings"}
                     </Button>
                   </FormLayout>
                 </Form>
@@ -839,6 +1106,7 @@ const AgeVerificationSettings = () => {
             )}
           </Layout.Section>
         </Layout>
+        {isNavigating && <MiFullScreenLoader />}
       </Page>
     </Frame>
   );

@@ -3,8 +3,8 @@ import { json } from "@remix-run/node";
 
 export const loader = async ({ request }) => {
   try {
-    const url = new URL(request.url);
-    const shop = url.searchParams.get("shop");
+    const miUrl = new URL(request.url);
+    const shop = miUrl.searchParams.get("shop");
 
     if (!shop) {
       return json({ error: "Shop parameter is missing" }, { status: 400 });
