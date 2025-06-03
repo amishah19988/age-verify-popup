@@ -80,35 +80,3 @@ model Account {
   updatedat DateTime? @default(now()) @db.Timestamp(6)
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 }
-
-model Product {
-  id       String  @id
-  shop     String
-  title    String
-  imageSrc String?
-
-  @@unique([id, shop])
-}
-
-model ThreeDProductViewerModel {
-  id        String  @id
-  shop      String
-  productId String
-  name      String
-  zipFile   String?
-  createdAt String?
-
-  @@unique([productId, shop])
-}
-
-model ThreeDProductViewerSettings {
-  id            String  @id
-  shop          String  @unique
-  serialKey     String
-  status        String
-  otherFeatures String  @default("Auto Zoom in Zoom out and Rotate")
-  width         Int     @default(900)
-  height        Int     @default(900)
-  createdAt     String?
-  updatedAt     String?
-}
