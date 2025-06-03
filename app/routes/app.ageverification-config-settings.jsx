@@ -114,33 +114,38 @@ export const action = async ({ request }) => {
       return json({ success: "Account created successfully", serialkey }, { status: 200 });
     }
 
-    // Trim form data to avoid whitespace issues
+    // Fetch existing settings to preserve unchanged fields
+    const existingSettings = await prisma.ageVerificationSettings.findFirst({
+      where: { shop },
+    });
+
+    // Trim form data to avoid whitespace issues and use existing values if fields are not submitted
     const settingsData = {
-      serialKey: formData.get("serialKey")?.trim(),
-      status: formData.get("status")?.trim(),
-      ageLimit: parseInt(formData.get("ageLimit"), 10),
-      verificationType: formData.get("verificationType")?.trim(),
-      linkTitle: formData.get("linkTitle")?.trim(),
-      anchorText: formData.get("anchorText")?.trim(),
-      anchorUrl: formData.get("anchorUrl")?.trim(),
-      textColor: formData.get("textColor")?.trim(),
-      buttonLabelLeft: formData.get("buttonLabelLeft")?.trim(),
-      buttonLeftBackgroundColor: formData.get("buttonLeftBackgroundColor")?.trim(),
-      buttonLeftTextColor: formData.get("buttonLeftTextColor")?.trim(),
-      buttonLabelRight: formData.get("buttonLabelRight")?.trim(),
-      buttonRightBackgroundColor: formData.get("buttonRightBackgroundColor")?.trim(),
-      buttonRightTextColor: formData.get("buttonRightTextColor")?.trim(),
-      popupTitle: formData.get("popupTitle")?.trim(),
-      contentTitle: formData.get("contentTitle")?.trim(),
-      contentTitleColor: formData.get("contentTitleColor")?.trim(),
-      contentSubtitle: formData.get("contentSubtitle")?.trim(),
-      contentSubtitleColor: formData.get("contentSubtitleColor")?.trim(),
-      headerBackgroundColor: formData.get("headerBackgroundColor")?.trim(),
-      bodyBackgroundColor: formData.get("bodyBackgroundColor")?.trim(),
-      underAgeNoticeType: formData.get("underAgeNoticeType")?.trim(),
-      underAgeMessage: formData.get("underAgeMessage")?.trim(),
-      redirectUrl: formData.get("redirectUrl")?.trim(),
-      cookieLifetime: parseInt(formData.get("cookieLifetime"), 10),
+      serialKey: formData.get("serialKey")?.trim() || existingSettings?.serialKey || "",
+      status: formData.get("status")?.trim() || existingSettings?.status || "",
+      ageLimit: parseInt(formData.get("ageLimit"), 10) || existingSettings?.ageLimit || 18,
+      verificationType: formData.get("verificationType")?.trim() || existingSettings?.verificationType || "",
+      linkTitle: formData.get("linkTitle")?.trim() || existingSettings?.linkTitle || "",
+      anchorText: formData.get("anchorText")?.trim() || existingSettings?.anchorText || "",
+      anchorUrl: formData.get("anchorUrl")?.trim() || existingSettings?.anchorUrl || "",
+      textColor: formData.get("textColor")?.trim() || existingSettings?.textColor || "",
+      buttonLabelLeft: formData.get("buttonLabelLeft")?.trim() || existingSettings?.buttonLabelLeft || "",
+      buttonLeftBackgroundColor: formData.get("buttonLeftBackgroundColor")?.trim() || existingSettings?.buttonLeftBackgroundColor || "",
+      buttonLeftTextColor: formData.get("buttonLeftTextColor")?.trim() || existingSettings?.buttonLeftTextColor || "",
+      buttonLabelRight: formData.get("buttonLabelRight")?.trim() || existingSettings?.buttonLabelRight || "",
+      buttonRightBackgroundColor: formData.get("buttonRightBackgroundColor")?.trim() || existingSettings?.buttonRightBackgroundColor || "",
+      buttonRightTextColor: formData.get("buttonRightTextColor")?.trim() || existingSettings?.buttonRightTextColor || "",
+      popupTitle: formData.get("popupTitle")?.trim() || existingSettings?.popupTitle || "",
+      contentTitle: formData.get("contentTitle")?.trim() || existingSettings?.contentTitle || "",
+      contentTitleColor: formData.get("contentTitleColor")?.trim() || existingSettings?.contentTitleColor || "",
+      contentSubtitle: formData.get("contentSubtitle")?.trim() || existingSettings?.contentSubtitle || "",
+      contentSubtitleColor: formData.get("contentSubtitleColor")?.trim() || existingSettings?.contentSubtitleColor || "",
+      headerBackgroundColor: formData.get("headerBackgroundColor")?.trim() || existingSettings?.headerBackgroundColor || "",
+      bodyBackgroundColor: formData.get("bodyBackgroundColor")?.trim() || existingSettings?.bodyBackgroundColor || "",
+      underAgeNoticeType: formData.get("underAgeNoticeType")?.trim() || existingSettings?.underAgeNoticeType || "",
+      underAgeMessage: formData.get("underAgeMessage")?.trim() || existingSettings?.underAgeMessage || "",
+      redirectUrl: formData.get("redirectUrl")?.trim() || existingSettings?.redirectUrl || "",
+      cookieLifetime: parseInt(formData.get("cookieLifetime"), 10) || existingSettings?.cookieLifetime || 30,
       shop,
     };
 
@@ -148,22 +153,38 @@ export const action = async ({ request }) => {
     console.log("Form Data Received:", settingsData);
 
     const miErrors = {};
-    if (!settingsData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
-    if (!settingsData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
-    if (!settingsData.popupTitle) miErrors.popupTitle = 'Popup Title is required';
-    if (!settingsData.contentSubtitle) miErrors.contentSubtitle = 'Content Subtitle is required';
+
+    // Validate fields only if their respective sections are open (fields are present)
+    if (formData.has("buttonLabelLeft") && formData.has("buttonLabelRight")) {
+      if (!settingsData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
+      if (!settingsData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
+    }
+
+    if (formData.has("popupTitle") && formData.has("contentSubtitle")) {
+      if (!settingsData.popupTitle) miErrors.popupTitle = 'Popup Title is required';
+      if (!settingsData.contentSubtitle) miErrors.contentSubtitle = 'Content Subtitle is required';
+    }
 
     if (settingsData.verificationType === 'checkbox') {
-      if (!settingsData.linkTitle) miErrors.linkTitle = 'Link Title is required';
-      if (!settingsData.anchorText) miErrors.anchorText = 'Anchor Text is required';
-      if (!settingsData.anchorUrl) miErrors.anchorUrl = 'Anchor URL is required';
+      const anchorFieldsPresent = formData.has("linkTitle") && formData.has("anchorText") && formData.has("anchorUrl");
+      if (anchorFieldsPresent) {
+        if (!settingsData.linkTitle) miErrors.linkTitle = 'Link Title is required';
+        if (!settingsData.anchorText) miErrors.anchorText = 'Anchor Text is required';
+        if (!settingsData.anchorUrl) miErrors.anchorUrl = 'Anchor URL is required';
+      }
     }
 
-    if (settingsData.underAgeNoticeType === 'show_message' && !settingsData.underAgeMessage) {
-      miErrors.underAgeMessage = 'Under-Age Message is required';
+    if (settingsData.underAgeNoticeType === 'show_message') {
+      const underAgeMessagePresent = formData.has("underAgeMessage");
+      if (underAgeMessagePresent && !settingsData.underAgeMessage) {
+        miErrors.underAgeMessage = 'Under-Age Message is required';
+      }
     }
-    if (settingsData.underAgeNoticeType === 'redirect_url' && !settingsData.redirectUrl) {
-      miErrors.redirectUrl = 'Redirect URL is required';
+    if (settingsData.underAgeNoticeType === 'redirect_url') {
+      const redirectUrlPresent = formData.has("redirectUrl");
+      if (redirectUrlPresent && !settingsData.redirectUrl) {
+        miErrors.redirectUrl = 'Redirect URL is required';
+      }
     }
 
     if (Object.keys(miErrors).length > 0) {
@@ -183,10 +204,6 @@ export const action = async ({ request }) => {
         return json({ error: 'Failed to process image' }, { status: 400 });
       }
     }
-
-    const existingSettings = await prisma.ageVerificationSettings.findFirst({
-      where: { shop },
-    });
 
     if (existingSettings) {
       await prisma.ageVerificationSettings.update({
@@ -278,25 +295,33 @@ const AgeVerificationSettings = () => {
   const miValidateForm = () => {
     const miErrors = {};
 
-    // Trim values to avoid whitespace issues
-    if (!miFormData.buttonLabelLeft?.trim()) miErrors.buttonLabelLeft = 'Button Label Left is required';
-    if (!miFormData.buttonLabelRight?.trim()) miErrors.buttonLabelRight = 'Button Label Right is required';
-    if (!miFormData.popupTitle?.trim()) miErrors.popupTitle = 'Popup Title is required';
-    if (!miFormData.contentSubtitle?.trim()) miErrors.contentSubtitle = 'Content Subtitle is required';
+    // Validate fields only if their respective sections are open
+    if (miButtonSettingsOpen) {
+      if (!miFormData.buttonLabelLeft?.trim()) miErrors.buttonLabelLeft = 'Button Label Left is required';
+      if (!miFormData.buttonLabelRight?.trim()) miErrors.buttonLabelRight = 'Button Label Right is required';
+    }
 
-    if (miFormData.verificationType === 'checkbox') {
+    if (miPopupSettingsOpen) {
+      if (!miFormData.popupTitle?.trim()) miErrors.popupTitle = 'Popup Title is required';
+      if (!miFormData.contentSubtitle?.trim()) miErrors.contentSubtitle = 'Content Subtitle is required';
+    }
+
+    if (miFormData.verificationType === 'checkbox' && miAnchorTextOpen) {
       if (!miFormData.linkTitle?.trim()) miErrors.linkTitle = 'Link Title is required';
       if (!miFormData.anchorText?.trim()) miErrors.anchorText = 'Anchor Text is required';
       if (!miFormData.anchorUrl?.trim()) miErrors.anchorUrl = 'Anchor URL is required';
     }
 
-    if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage?.trim()) {
-      miErrors.underAgeMessage = 'Under-Age Message is required';
-    }
-    if (miFormData.underAgeNoticeType === 'redirect_url' && !miFormData.redirectUrl?.trim()) {
-      miErrors.redirectUrl = 'Redirect URL is required';
+    if (miUnderAgeSettingsOpen) {
+      if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage?.trim()) {
+        miErrors.underAgeMessage = 'Under-Age Message is required';
+      }
+      if (miFormData.underAgeNoticeType === 'redirect_url' && !miFormData.redirectUrl?.trim()) {
+        miErrors.redirectUrl = 'Redirect URL is required';
+      }
     }
 
+    console.log("Client-Side Validation Errors:", miErrors);
     return miErrors;
   };
 
@@ -362,7 +387,7 @@ const AgeVerificationSettings = () => {
   };
 
   const miHandleSubmit = (event) => {
-    console.log("Form Data on Submit:", miFormData); // Debug log
+    console.log("Form Data on Submit:", miFormData);
     const miErrors = miValidateForm();
     if (Object.keys(miErrors).length > 0) {
       event.preventDefault();
@@ -670,7 +695,7 @@ const AgeVerificationSettings = () => {
                                 name="linkTitle"
                                 value={miFormData.linkTitle}
                                 onChange={(value) => miHandleChange('linkTitle', value)}
-                                required
+                                required={miAnchorTextOpen}
                                 error={miFormErrors.linkTitle}
                               />
                             </div>
@@ -683,7 +708,7 @@ const AgeVerificationSettings = () => {
                                 name="anchorText"
                                 value={miFormData.anchorText}
                                 onChange={(value) => miHandleChange('anchorText', value)}
-                                required
+                                required={miAnchorTextOpen}
                                 error={miFormErrors.anchorText}
                               />
                             </div>
@@ -696,7 +721,7 @@ const AgeVerificationSettings = () => {
                                 name="anchorUrl"
                                 value={miFormData.anchorUrl}
                                 onChange={(value) => miHandleChange('anchorUrl', value)}
-                                required
+                                required={miAnchorTextOpen}
                                 error={miFormErrors.anchorUrl}
                               />
                             </div>
@@ -746,7 +771,7 @@ const AgeVerificationSettings = () => {
                               name="buttonLabelLeft"
                               value={miFormData.buttonLabelLeft}
                               onChange={(value) => miHandleChange('buttonLabelLeft', value)}
-                              required
+                              required={miButtonSettingsOpen}
                               error={miFormErrors.buttonLabelLeft}
                             />
                           </div>
@@ -803,7 +828,7 @@ const AgeVerificationSettings = () => {
                               name="buttonLabelRight"
                               value={miFormData.buttonLabelRight}
                               onChange={(value) => miHandleChange('buttonLabelRight', value)}
-                              required
+                              required={miButtonSettingsOpen}
                               error={miFormErrors.buttonLabelRight}
                             />
                           </div>
@@ -874,7 +899,7 @@ const AgeVerificationSettings = () => {
                               name="popupTitle"
                               value={miFormData.popupTitle}
                               onChange={(value) => miHandleChange('popupTitle', value)}
-                              required
+                              required={miPopupSettingsOpen}
                               error={miFormErrors.popupTitle}
                             />
                           </div>
@@ -966,7 +991,7 @@ const AgeVerificationSettings = () => {
                               value={miFormData.contentSubtitle}
                               onChange={(value) => miHandleChange('contentSubtitle', value)}
                               multiline={4}
-                              required
+                              required={miPopupSettingsOpen}
                               error={miFormErrors.contentSubtitle}
                             />
                           </div>
@@ -1034,7 +1059,7 @@ const AgeVerificationSettings = () => {
                                 onChange={(value) => miHandleChange('underAgeMessage', value)}
                                 multiline={4}
                                 placeholder="Enter message for under-age users"
-                                required
+                                required={miUnderAgeSettingsOpen}
                                 error={miFormErrors.underAgeMessage}
                               />
                             </div>
@@ -1050,7 +1075,7 @@ const AgeVerificationSettings = () => {
                                 value={miFormData.redirectUrl}
                                 onChange={(value) => miHandleChange('redirectUrl', value)}
                                 placeholder="Enter redirect URL for under-age users"
-                                required
+                                required={miUnderAgeSettingsOpen}
                                 error={miFormErrors.redirectUrl}
                               />
                             </div>
