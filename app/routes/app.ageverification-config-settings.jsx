@@ -114,34 +114,38 @@ export const action = async ({ request }) => {
       return json({ success: "Account created successfully", serialkey }, { status: 200 });
     }
 
+    // Trim form data to avoid whitespace issues
     const settingsData = {
-      serialKey: formData.get("serialKey"),
-      status: formData.get("status"),
+      serialKey: formData.get("serialKey")?.trim(),
+      status: formData.get("status")?.trim(),
       ageLimit: parseInt(formData.get("ageLimit"), 10),
-      verificationType: formData.get("verificationType"),
-      linkTitle: formData.get("linkTitle"),
-      anchorText: formData.get("anchorText"),
-      anchorUrl: formData.get("anchorUrl"),
-      textColor: formData.get("textColor"),
-      buttonLabelLeft: formData.get("buttonLabelLeft"),
-      buttonLeftBackgroundColor: formData.get("buttonLeftBackgroundColor"),
-      buttonLeftTextColor: formData.get("buttonLeftTextColor"),
-      buttonLabelRight: formData.get("buttonLabelRight"),
-      buttonRightBackgroundColor: formData.get("buttonRightBackgroundColor"),
-      buttonRightTextColor: formData.get("buttonRightTextColor"),
-      popupTitle: formData.get("popupTitle"),
-      contentTitle: formData.get("contentTitle"),
-      contentTitleColor: formData.get("contentTitleColor"),
-      contentSubtitle: formData.get("contentSubtitle"),
-      contentSubtitleColor: formData.get("contentSubtitleColor"),
-      headerBackgroundColor: formData.get("headerBackgroundColor"),
-      bodyBackgroundColor: formData.get("bodyBackgroundColor"),
-      underAgeNoticeType: formData.get("underAgeNoticeType"),
-      underAgeMessage: formData.get("underAgeMessage"),
-      redirectUrl: formData.get("redirectUrl"),
+      verificationType: formData.get("verificationType")?.trim(),
+      linkTitle: formData.get("linkTitle")?.trim(),
+      anchorText: formData.get("anchorText")?.trim(),
+      anchorUrl: formData.get("anchorUrl")?.trim(),
+      textColor: formData.get("textColor")?.trim(),
+      buttonLabelLeft: formData.get("buttonLabelLeft")?.trim(),
+      buttonLeftBackgroundColor: formData.get("buttonLeftBackgroundColor")?.trim(),
+      buttonLeftTextColor: formData.get("buttonLeftTextColor")?.trim(),
+      buttonLabelRight: formData.get("buttonLabelRight")?.trim(),
+      buttonRightBackgroundColor: formData.get("buttonRightBackgroundColor")?.trim(),
+      buttonRightTextColor: formData.get("buttonRightTextColor")?.trim(),
+      popupTitle: formData.get("popupTitle")?.trim(),
+      contentTitle: formData.get("contentTitle")?.trim(),
+      contentTitleColor: formData.get("contentTitleColor")?.trim(),
+      contentSubtitle: formData.get("contentSubtitle")?.trim(),
+      contentSubtitleColor: formData.get("contentSubtitleColor")?.trim(),
+      headerBackgroundColor: formData.get("headerBackgroundColor")?.trim(),
+      bodyBackgroundColor: formData.get("bodyBackgroundColor")?.trim(),
+      underAgeNoticeType: formData.get("underAgeNoticeType")?.trim(),
+      underAgeMessage: formData.get("underAgeMessage")?.trim(),
+      redirectUrl: formData.get("redirectUrl")?.trim(),
       cookieLifetime: parseInt(formData.get("cookieLifetime"), 10),
       shop,
     };
+
+    // Log form data for debugging
+    console.log("Form Data Received:", settingsData);
 
     const miErrors = {};
     if (!settingsData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
@@ -163,6 +167,7 @@ export const action = async ({ request }) => {
     }
 
     if (Object.keys(miErrors).length > 0) {
+      console.log("Validation Errors:", miErrors);
       return json({ errors: miErrors }, { status: 400 });
     }
 
@@ -273,21 +278,22 @@ const AgeVerificationSettings = () => {
   const miValidateForm = () => {
     const miErrors = {};
 
-    if (!miFormData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
-    if (!miFormData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
-    if (!miFormData.popupTitle) miErrors.popupTitle = 'Popup Title is required';
-    if (!miFormData.contentSubtitle) miErrors.contentSubtitle = 'Content Subtitle is required';
+    // Trim values to avoid whitespace issues
+    if (!miFormData.buttonLabelLeft?.trim()) miErrors.buttonLabelLeft = 'Button Label Left is required';
+    if (!miFormData.buttonLabelRight?.trim()) miErrors.buttonLabelRight = 'Button Label Right is required';
+    if (!miFormData.popupTitle?.trim()) miErrors.popupTitle = 'Popup Title is required';
+    if (!miFormData.contentSubtitle?.trim()) miErrors.contentSubtitle = 'Content Subtitle is required';
 
     if (miFormData.verificationType === 'checkbox') {
-      if (!miFormData.linkTitle) miErrors.linkTitle = 'Link Title is required';
-      if (!miFormData.anchorText) miErrors.anchorText = 'Anchor Text is required';
-      if (!miFormData.anchorUrl) miErrors.anchorUrl = 'Anchor URL is required';
+      if (!miFormData.linkTitle?.trim()) miErrors.linkTitle = 'Link Title is required';
+      if (!miFormData.anchorText?.trim()) miErrors.anchorText = 'Anchor Text is required';
+      if (!miFormData.anchorUrl?.trim()) miErrors.anchorUrl = 'Anchor URL is required';
     }
 
-    if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage) {
+    if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage?.trim()) {
       miErrors.underAgeMessage = 'Under-Age Message is required';
     }
-    if (miFormData.underAgeNoticeType === 'redirect_url' && !miFormData.redirectUrl) {
+    if (miFormData.underAgeNoticeType === 'redirect_url' && !miFormData.redirectUrl?.trim()) {
       miErrors.redirectUrl = 'Redirect URL is required';
     }
 
@@ -356,6 +362,7 @@ const AgeVerificationSettings = () => {
   };
 
   const miHandleSubmit = (event) => {
+    console.log("Form Data on Submit:", miFormData); // Debug log
     const miErrors = miValidateForm();
     if (Object.keys(miErrors).length > 0) {
       event.preventDefault();
@@ -793,12 +800,12 @@ const AgeVerificationSettings = () => {
                           <div style={{ flex: '1 1 0%' }}>
                             <p style={fieldLabelStyle}>Button Label Right</p>
                             <TextField
-                                name="buttonLabelRight"
-                                value={miFormData.buttonLabelRight}
-                                onChange={(value) => miHandleChange('buttonLabelRight', value)}
-                                required
-                                error={miFormErrors.buttonLabelRight}
-                              />
+                              name="buttonLabelRight"
+                              value={miFormData.buttonLabelRight}
+                              onChange={(value) => miHandleChange('buttonLabelRight', value)}
+                              required
+                              error={miFormErrors.buttonLabelRight}
+                            />
                           </div>
                         </div>
                         <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonRightBackgroundColor) }}>
@@ -1005,15 +1012,15 @@ const AgeVerificationSettings = () => {
                           <div style={{ flex: '1 1 0%' }}>
                             <p style={fieldLabelStyle}>Under-Age Notice Type</p>
                             <Select
-                                name="underAgeNoticeType"
-                                options={[
-                                  { label: 'Show Message', value: 'show_message' },
-                                  { label: 'Redirect URL', value: 'redirect_url' },
-                                ]}
-                                value={miFormData.underAgeNoticeType}
-                                onChange={(value) => miHandleChange('underAgeNoticeType', value)}
-                                error={miFormErrors.underAgeNoticeType}
-                              />
+                              name="underAgeNoticeType"
+                              options={[
+                                { label: 'Show Message', value: 'show_message' },
+                                { label: 'Redirect URL', value: 'redirect_url' },
+                              ]}
+                              value={miFormData.underAgeNoticeType}
+                              onChange={(value) => miHandleChange('underAgeNoticeType', value)}
+                              error={miFormErrors.underAgeNoticeType}
+                            />
                           </div>
                         </div>
                         {miShowUnderAgeMessage && (
