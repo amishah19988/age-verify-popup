@@ -333,7 +333,7 @@ export default function AgeVerificationPopup() {
                   <Text as="p" tone="subdued">
                     Create an account to start configuring the age verification popup.
                   </Text>
-                  <div style={saveButtonStyle}>
+                  <div style={buttonContentStyle}>
                     <Button
                       variant="primary"
                       size="slim"
