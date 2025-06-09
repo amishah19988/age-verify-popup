@@ -1098,18 +1098,56 @@ const AgeVerificationSettings = () => {
                         <div style={fieldContainerStyle}>
                           <div style={{ flex: '1 1 0%' }}>
                             <p style={fieldLabelStyle}>Icon Image</p>
-                            <input
-                              type="file"
-                              name="iconImage"
-                              id="iconImage"
-                              accept="image/jpeg,image/png,image/gif"
-                              onChange={miHandleFileChange}
-                              style={fieldInputStyle}
-                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <label
+                                htmlFor="iconImage"
+                                style={{
+                                  backgroundColor: '#f4f6f8',
+                                  border: '1px solid #005bd3',
+                                  borderRadius: '4px',
+                                  padding: '6px 12px',
+                                  color: '#005bd3',
+                                  fontSize: '14px',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Choose File
+                                <input
+                                  type="file"
+                                  name="iconImage"
+                                  id="iconImage"
+                                  accept="image/jpeg,image/png,image/gif"
+                                  onChange={miHandleFileChange}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                              <span style={{ fontSize: '14px', color: '#6d7175' }}>
+                                {miFileName}
+                              </span>
+                              {miFileName !== 'No file chosen' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    miSetFileName('No file chosen');
+                                    document.getElementById('iconImage').value = ''; // Reset the file input
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '0',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <span style={{ fontSize: '16px', color: '#6d7175' }}>×</span>
+                                </button>
+                              )}
+                            </div>
                             <div style={{ marginTop: '4px', color: '#6d7175', fontSize: '12px' }}>
                               Choose the icon to upload (JPEG, GIF, PNG).
                             </div>
-                            <span>{miFileName}</span>
                             {settings && settings.iconImage && (
                               <div style={{ marginTop: '8px' }}>
                                 <img
