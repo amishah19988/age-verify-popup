@@ -1,12 +1,5 @@
-import { json, redirect } from "@remix-run/node";
-import {
-  useFetcher,
-  useLoaderData,
-  useActionData,
-  Form,
-  useNavigation,
-  useNavigate,
-} from "@remix-run/react";
+import { useEffect, useState } from "react";
+import { useFetcher, useLoaderData, useActionData, useNavigation } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -16,13 +9,32 @@ import {
   BlockStack,
   Spinner,
   List,
-  Frame,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import prisma from "../db.server";
+import { json, redirect } from "@remix-run/node";
 import NavigationBar from './NavigationBar';
+
+const MiFullScreenLoader = () => (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      background: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 2000,
+    }}
+  >
+    <Spinner accessibilityLabel="Loading" size="large" />
+  </div>
+);
 
 export const loader = async ({ request }) => {
   try {
@@ -115,26 +127,6 @@ export const action = async ({ request }) => {
   }
 };
 
-// Use PascalCase for React component
-const MiFullScreenLoader = () => (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      background: "rgba(0, 0, 0, 0.5)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 2000,
-    }}
-  >
-    <Spinner accessibilityLabel="Loading" size="large" />
-  </div>
-);
-
 export default function AgeVerificationPopup() {
   const { shop, existingAccount: miInitialAccount } = useLoaderData();
   const miActionData = useActionData();
@@ -146,7 +138,6 @@ export default function AgeVerificationPopup() {
   const [miCreatedAccount, miSetCreatedAccount] = useState(miInitialAccount);
   const [miEmailError, miSetEmailError] = useState("");
   const [miIsGuideOpen, miSetIsGuideOpen] = useState(false);
-  // Include both submitting and loading states for miIsLoading
   const miIsLoading =
     ["loading", "submitting"].includes(miFetcher.state) ||
     ["loading", "submitting"].includes(miNavigation.state);
@@ -200,6 +191,19 @@ export default function AgeVerificationPopup() {
     }
   };
 
+  const saveButtonStyle = {
+    display: 'flex',
+    marginTop: '20px',
+  };
+
+  const buttonContentStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '5px',
+  };
+
   return (
     <Page>
       <TitleBar title="Age Verification Popup" />
@@ -223,8 +227,104 @@ export default function AgeVerificationPopup() {
                 marginBottom: "1rem",
               }}
             />
-            {/* Show "Create Account" button below banner if no account exists */}
-            {!miCreatedAccount && (
+            <Card>
+              <div
+                onClick={() => miSetIsGuideOpen(!miIsGuideOpen)}
+                style={{
+                  cursor: "pointer",
+                  padding: "1rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <img src="/guide.svg" alt="Guide" style={{ width: "40px", height: "40px" }} />
+                  <Text as="h2" variant="headingMd">
+                    Setup Guide: Get Started with Age Verification Popup
+                  </Text>
+                </div>
+                <button
+                  className="Polaris-Button Polaris-Button--pressable Polaris-Button--variantSecondary Polaris-Button--sizeMedium Polaris-Button--textAlignCenter"
+                  type="button"
+                  onClick={() => miSetIsGuideOpen(!miIsGuideOpen)}
+                >
+                  <span className="Polaris-Text--root Polaris-Text--bodySm Polaris-Text--medium">
+                    <span className="Polaris-Icon">
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="Polaris-Icon__Svg"
+                        focusable="false"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.72 8.47a.75.75 0 0 1 1.06 0l3.47 3.47 3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06Z"
+                        />
+                      </svg>
+                    </span>
+                  </span>
+                </button>
+              </div>
+              {miIsGuideOpen && (
+                <div style={{ padding: "0 1rem" }}>
+                  <Text
+                    as="p"
+                    variant="bodyMd"
+                    tone="subdued"
+                    style={{ marginBottom: "1rem" }}
+                  >
+                    Follow these steps to set up and configure the age verification popup in your store, ensuring compliance with age-restricted content.
+                  </Text>
+                  <List type="number">
+                    <List.Item>
+                      <Text as="span" variant="bodyMd">
+                        <strong>Enable Age Verification:</strong> Enable the Storefront integration to start. Embed the Age Verification Popup by clicking the button below or navigating to Online Store > Themes > Customize > App Embeds, and save your settings after enabling the app block.
+                      </Text>
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <Button
+                          onClick={miHandleRedirect}
+                          variant="primary"
+                          disabled={!miCreatedAccount || miIsLoading}
+                        >
+                          Enable theme block
+                        </Button>
+                      </div>
+                    </List.Item>
+                    <List.Item>
+                      <Text as="span" variant="bodyMd">
+                        <strong>Configure Age Verification Settings:</strong>{" "}
+                        Set your preferred configuration on the Configuration page, such as age limit, popup message, and styling options for the age verification popup.
+                      </Text>
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <Button
+                          onClick={() => miNavigate("/app/ageverification-config-settings")}
+                          variant="primary"
+                          disabled={miIsLoading}
+                        >
+                          Go to Configuration
+                        </Button>
+                      </div>
+                    </List.Item>
+                    <List.Item>
+                      <Text as="span" variant="bodyMd">
+                        <strong>Setup Rules:</strong> Define rules for when and how the age verification popup should appear, such as specific pages or user conditions, on the Rules page.
+                      </Text>
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <Button
+                          onClick={() => miNavigate("/app/rules")}
+                          variant="primary"
+                          disabled={miIsLoading}
+                        >
+                          Go to Rules
+                        </Button>
+                      </div>
+                    </List.Item>
+                  </List>
+                </div>
+              )}
+            </Card>
+            {!miCreatedAccount ? (
               <Card>
                 <BlockStack gap="200">
                   <Text as="h2" variant="headingMd">
@@ -233,123 +333,66 @@ export default function AgeVerificationPopup() {
                   <Text as="p" tone="subdued">
                     Create an account to start configuring the age verification popup.
                   </Text>
-                  <div style={{ width: "150px" }}>
+                  <div style={saveButtonStyle}>
                     <Button
                       variant="primary"
                       size="slim"
                       onClick={() => miNavigate("/app/settings")}
                       disabled={miIsLoading}
-                      fullWidth // Ensures the button spans the container's width
+                      style={{ backgroundColor: '#000000', color: '#FFFFFF' }}
                     >
-                      Create Account
+                      <div style={buttonContentStyle}>
+                        <span>Create Account</span>
+                        <img
+                          src="/arrow-right.svg"
+                          alt="Arrow Right"
+                          style={{ width: "16px", height: "16px" }}
+                        />
+                      </div>
                     </Button>
                   </div>
                 </BlockStack>
               </Card>
-            )}
-          </Layout.Section>
-
-          {miCreatedAccount && (
-            <Layout.Section>
+            ) : (
               <Card>
                 <div
-                  onClick={() => miSetIsGuideOpen(!miIsGuideOpen)}
                   style={{
-                    cursor: "pointer",
-                    padding: "1rem",
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "1rem",
+                    padding: "1rem",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <img src="/guide.svg" alt="Guide" style={{ width: "40px", height: "40px" }} />
-                    <Text as="h2" variant="headingMd">
-                      Setup Guide: Get Started with Age Verification Popup
-                    </Text>
-                  </div>
-                  <button
-                    className="Polaris-Button Polaris-Button--pressable Polaris-Button--variantSecondary Polaris-Button--sizeMedium Polaris-Button--textAlignCenter"
-                    type="button"
-                    onClick={() => miSetIsGuideOpen(!miIsGuideOpen)}
-                  >
-                    <span className="Polaris-Text--root Polaris-Text--bodySm Polaris-Text--medium">
-                      <span className="Polaris-Icon">
-                        <svg
-                          viewBox="0 0 20 20"
-                          className="Polaris-Icon__Svg"
-                          focusable="false"
-                          aria-hidden="true"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5.72 8.47a.75.75 0 0 1 1.06 0l3.47 3.47 3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06Z"
-                          />
-                        </svg>
-                      </span>
-                    </span>
-                  </button>
-                </div>
-                {miIsGuideOpen && (
-                  <div style={{ padding: "0 1rem" }}>
-                    <Text
-                      as="p"
-                      variant="bodyMd"
-                      tone="subdued"
-                      style={{ marginBottom: "1rem" }}
+                  <div style={{ width: "160px" }}>
+                    <Button
+                      variant="primary"
+                      size="slim"
+                      onClick={() => miNavigate("/app/settings")}
+                      disabled={miIsLoading}
+                      fullWidth
                     >
-                      Follow these steps to set up and configure the age verification popup in your store, ensuring compliance with age-restricted content.
-                    </Text>
-                    <List type="number">
-                      <List.Item>
-                        <Text as="span" variant="bodyMd">
-                          <strong>Enable Age Verification:</strong> Enable the Storefront integration to start. Embed the Age Verification Popup by clicking the button below or navigating to Online Store &gt; Themes &gt; Customize &gt; App Embeds, and save your settings after enabling the app block.
-                        </Text>
-                        <div style={{ marginTop: "0.5rem" }}>
-                          <Button
-                            onClick={miHandleRedirect}
-                            variant="primary"
-                            disabled={!miCreatedAccount || miIsLoading}
-                          >
-                            Enable theme block
-                          </Button>
-                        </div>
-                      </List.Item>
-                      <List.Item>
-                        <Text as="span" variant="bodyMd">
-                          <strong>Configure Age Verification Settings:</strong>{" "}
-                          Set your preferred configuration on the Configuration page, such as age limit, popup message, and styling options for the age verification popup.
-                        </Text>
-                        <div style={{ marginTop: "0.5rem" }}>
-                          <Button
-                            onClick={() => miNavigate("/app/ageverification-config-settings")}
-                            variant="primary"
-                            disabled={miIsLoading}
-                          >
-                            Go to Configuration
-                          </Button>
-                        </div>
-                      </List.Item>
-                      <List.Item>
-                        <Text as="span" variant="bodyMd">
-                          <strong>Setup Rules:</strong> Define rules for when and how the age verification popup should appear, such as specific pages or user conditions, on the Rules page.
-                        </Text>
-                        <div style={{ marginTop: "0.5rem" }}>
-                          <Button
-                            onClick={() => miNavigate("/app/rules")}
-                            variant="primary"
-                            disabled={miIsLoading}
-                          >
-                            Go to Rules
-                          </Button>
-                        </div>
-                      </List.Item>
-                    </List>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.5rem",
+                          padding: "5px",
+                        }}
+                      >
+                        <span>View Account</span>
+                        <img
+                          src="/arrow-right.svg"
+                          alt="Arrow Right"
+                          style={{ width: "16px", height: "16px" }}
+                        />
+                      </div>
+                    </Button>
                   </div>
-                )}
+                </div>
               </Card>
-            </Layout.Section>
-          )}
+            )}
+          </Layout.Section>
         </Layout>
       </BlockStack>
       {miIsLoading && <MiFullScreenLoader />}
