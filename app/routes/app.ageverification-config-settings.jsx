@@ -1,6 +1,6 @@
 import { json } from '@remix-run/node';
 import { Form, useLoaderData, useActionData, useNavigation } from '@remix-run/react';
-import { Frame, Page, Layout, Card, FormLayout, TextField, Button, Select, Toast, Text, Collapsible, Spinner } from '@shopify/polaris';
+import { Frame, Page, Layout, Card, FormLayout, TextField, Button, Select, Toast, Text, Collapsible, Spinner, InlineStack } from '@shopify/polaris';
 import { TitleBar } from '@shopify/app-bridge-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { authenticate } from '../shopify.server';
@@ -27,12 +27,83 @@ const MiFullScreenLoader = () => (
   </div>
 );
 
-const miColorFieldStyles = (color) => ({
-  backgroundColor: color,
-  borderRadius: '4px',
-  overflow: 'hidden',
-  padding: '10px',
-});
+// Custom File Input Component for Icon Image Upload
+const CustomFileInput = ({ id, name, accept, fileInputRef, onChange }) => {
+  const [fileName, setFileName] = useState('No file chosen');
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    setFileName(file ? file.name : 'No file chosen');
+    if (onChange) onChange(event);
+  };
+
+  const handleClear = () => {
+    setFileName('No file chosen');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <InlineStack gap="200" align="start" blockAlign="center">
+      <div style={{ position: 'relative' }}>
+        <input
+          type="file"
+          id={id}
+          name={name}
+          accept={accept}
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          style={{
+            opacity: 0,
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            cursor: 'pointer',
+          }}
+        />
+        <button
+          type="button"
+          style={{
+            backgroundColor: '#DDD',
+            border: '1px solid #D3D3D3',
+            borderRadius: '15px',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: '#000000',
+          }}
+        >
+          Choose File
+        </button>
+      </div>
+      <Text as="span" variant="bodyMd">
+        {fileName}
+      </Text>
+      {fileName !== 'No file chosen' && (
+        <button
+          type="button"
+          onClick={handleClear}
+          style={{
+            backgroundColor: '#E0E0E0',
+            border: '1px solid #D3D3D3',
+            borderRadius: '50%',
+            width: '24px',
+            height: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: '#6D7175',
+          }}
+        >
+          ✕
+        </button>
+      )}
+    </InlineStack>
+  );
+};
 
 export const loader = async ({ request }) => {
   try {
@@ -114,12 +185,10 @@ export const action = async ({ request }) => {
       return json({ success: "Account created successfully", serialkey }, { status: 200 });
     }
 
-    // Fetch existing settings to preserve unchanged fields
     const existingSettings = await prisma.ageVerificationSettings.findFirst({
       where: { shop },
     });
 
-    // Trim form data to avoid whitespace issues and use existing values if fields are not submitted
     const settingsData = {
       serialKey: formData.get("serialKey")?.trim() || existingSettings?.serialKey || "",
       status: formData.get("status")?.trim() || existingSettings?.status || "",
@@ -149,12 +218,11 @@ export const action = async ({ request }) => {
       shop,
     };
 
-    // Log form data for debugging
     console.log("Form Data Received:", settingsData);
 
     const miErrors = {};
 
-    // Validate fields only if their respective sections are open (fields are present)
+    // Validate only if the fields are present in the form submission
     if (formData.has("buttonLabelLeft") && formData.has("buttonLabelRight")) {
       if (!settingsData.buttonLabelLeft) miErrors.buttonLabelLeft = 'Button Label Left is required';
       if (!settingsData.buttonLabelRight) miErrors.buttonLabelRight = 'Button Label Right is required';
@@ -230,12 +298,10 @@ const AgeVerificationSettings = () => {
   const [miShowToast, miSetShowToast] = useState(false);
   const [miToastMessage, miSetToastMessage] = useState('');
   const [miToastError, miSetToastError] = useState(false);
-  const [miFileName, miSetFileName] = useState('No file chosen');
   const [miAccountForm, miSetAccountForm] = useState({ username: '', email: '' });
   const [miEmailError, miSetEmailError] = useState('');
   const [miFormErrors, miSetFormErrors] = useState({});
 
-  // State for collapsible sections
   const [miConfigurationOpen, miSetConfigurationOpen] = useState(true);
   const [miAnchorTextOpen, miSetAnchorTextOpen] = useState(false);
   const [miButtonSettingsOpen, miSetButtonSettingsOpen] = useState(false);
@@ -280,6 +346,7 @@ const AgeVerificationSettings = () => {
   const miBodyBackgroundColorPickerRef = useRef(null);
   const miContentTitleColorPickerRef = useRef(null);
   const miContentSubtitleColorPickerRef = useRef(null);
+  const miIconImageInputRef = useRef(null);
 
   const miValidateEmail = (email) => {
     const miEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -295,24 +362,27 @@ const AgeVerificationSettings = () => {
   const miValidateForm = () => {
     const miErrors = {};
 
-    // Validate fields only if their respective sections are open
-    if (miButtonSettingsOpen) {
+    // Validate Button Settings fields if section is open or fields have been modified
+    if (miButtonSettingsOpen || miFormData.buttonLabelLeft !== settings?.buttonLabelLeft || miFormData.buttonLabelRight !== settings?.buttonLabelRight) {
       if (!miFormData.buttonLabelLeft?.trim()) miErrors.buttonLabelLeft = 'Button Label Left is required';
       if (!miFormData.buttonLabelRight?.trim()) miErrors.buttonLabelRight = 'Button Label Right is required';
     }
 
-    if (miPopupSettingsOpen) {
+    // Validate Popup Settings fields if section is open or fields have been modified
+    if (miPopupSettingsOpen || miFormData.popupTitle !== settings?.popupTitle || miFormData.contentSubtitle !== settings?.contentSubtitle) {
       if (!miFormData.popupTitle?.trim()) miErrors.popupTitle = 'Popup Title is required';
       if (!miFormData.contentSubtitle?.trim()) miErrors.contentSubtitle = 'Content Subtitle is required';
     }
 
-    if (miFormData.verificationType === 'checkbox' && miAnchorTextOpen) {
+    // Validate Anchor Text fields if verificationType is 'checkbox' and section is open or fields have been modified
+    if (miFormData.verificationType === 'checkbox' && (miAnchorTextOpen || miFormData.linkTitle !== settings?.linkTitle || miFormData.anchorText !== settings?.anchorText || miFormData.anchorUrl !== settings?.anchorUrl)) {
       if (!miFormData.linkTitle?.trim()) miErrors.linkTitle = 'Link Title is required';
       if (!miFormData.anchorText?.trim()) miErrors.anchorText = 'Anchor Text is required';
       if (!miFormData.anchorUrl?.trim()) miErrors.anchorUrl = 'Anchor URL is required';
     }
 
-    if (miUnderAgeSettingsOpen) {
+    // Validate Under Age Notice fields if section is open or fields have been modified
+    if (miUnderAgeSettingsOpen || miFormData.underAgeNoticeType !== settings?.underAgeNoticeType || miFormData.underAgeMessage !== settings?.underAgeMessage || miFormData.redirectUrl !== settings?.redirectUrl) {
       if (miFormData.underAgeNoticeType === 'show_message' && !miFormData.underAgeMessage?.trim()) {
         miErrors.underAgeMessage = 'Under-Age Message is required';
       }
@@ -358,6 +428,22 @@ const AgeVerificationSettings = () => {
     }));
   };
 
+  const miHandleFileChange = (event) => {
+    // File name state is managed by CustomFileInput; this function is a placeholder for additional logic if needed
+  };
+
+  const miHandleSubmit = (event) => {
+    console.log("Form Data on Submit:", miFormData);
+    const miErrors = miValidateForm();
+    if (Object.keys(miErrors).length > 0) {
+      event.preventDefault();
+      miSetFormErrors(miErrors);
+      miSetToastMessage('Please fill in all required fields');
+      miSetToastError(true);
+      miSetShowToast(true);
+    }
+  };
+
   useEffect(() => {
     if (miActionData && miActionData.success && miNavigation.state === 'idle') {
       miSetToastMessage(miActionData.success);
@@ -380,23 +466,6 @@ const AgeVerificationSettings = () => {
       miSetShowToast(true);
     }
   }, [miActionData, miNavigation.state]);
-
-  const miHandleFileChange = (event) => {
-    const miFile = event.target.files[0];
-    miSetFileName(miFile ? miFile.name : 'No file chosen');
-  };
-
-  const miHandleSubmit = (event) => {
-    console.log("Form Data on Submit:", miFormData);
-    const miErrors = miValidateForm();
-    if (Object.keys(miErrors).length > 0) {
-      event.preventDefault();
-      miSetFormErrors(miErrors);
-      miSetToastMessage('Please fill in all required fields');
-      miSetToastError(true);
-      miSetShowToast(true);
-    }
-  };
 
   const miToastMarkup = miShowToast ? (
     <Toast
@@ -463,13 +532,13 @@ const AgeVerificationSettings = () => {
     padding: '10px',
     backgroundColor: 'rgb(246, 246, 247)',
     borderRadius: '5px',
-    marginBottom: '10px'
+    marginBottom: '10px',
   };
 
   const fieldLabelStyle = {
     fontSize: '14px',
     color: 'rgb(51, 51, 51)',
-    margin: '0px'
+    margin: '0px',
   };
 
   const fieldInputStyle = {
@@ -478,16 +547,33 @@ const AgeVerificationSettings = () => {
     border: '1px solid rgb(223, 227, 232)',
     borderRadius: '4px',
     fontSize: '14px',
-    background: 'white'
+    background: 'white',
   };
 
-  const colorPickerStyle = {
-    width: '32px',
-    height: '32px',
-    border: '1px solid #767676',
-    padding: '0',
-    background: 'none'
+  const colorFieldContainerStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '10px',
+    backgroundColor: 'rgb(246, 246, 247)',
+    borderRadius: '5px',
+    marginBottom: '10px',
   };
+
+  const colorFieldRowStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  };
+
+  const colorBarStyle = (color) => ({
+    width: '40%',
+    height: '40px',
+    backgroundColor: color,
+    borderRadius: '4px',
+    cursor: 'pointer',
+    border: '1px solid #767676',
+  });
 
   const sectionHeaderStyle = {
     display: 'flex',
@@ -497,16 +583,22 @@ const AgeVerificationSettings = () => {
     cursor: 'pointer',
     backgroundColor: '#f4f6f8',
     borderRadius: '4px',
-    marginBottom: '10px'
+    marginBottom: '10px',
   };
 
   const iconStyle = {
     width: '20px',
-    height: '20px'
+    height: '20px',
   };
 
   const sectionWrapperStyle = {
-    marginBottom: '20px'
+    marginBottom: '20px',
+  };
+
+  const handleColorPickerClick = (ref) => {
+    if (ref.current) {
+      ref.current.click();
+    }
   };
 
   return (
@@ -726,27 +818,30 @@ const AgeVerificationSettings = () => {
                               />
                             </div>
                           </div>
-                          <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.textColor) }}>
-                            <img src="/textcolor.svg" alt="Anchor Text Color Icon" style={{ width: '48px', height: '48px' }} />
-                            <div style={{ flex: '1 1 0%' }}>
-                              <p style={fieldLabelStyle}>Anchor Text Color</p>
-                              <TextField
-                                name="textColor"
-                                value={miFormData.textColor}
-                                onChange={(value) => miHandleChange('textColor', value)}
-                                connectedRight={
-                                  <input
-                                    type="color"
-                                    ref={miTextColorPickerRef}
-                                    name="textColor"
-                                    value={miFormData.textColor}
-                                    onChange={miHandleColorChange}
-                                    style={colorPickerStyle}
-                                  />
-                                }
-                                error={miFormErrors.textColor}
-                              />
+                          <div style={colorFieldContainerStyle}>
+                            <p style={fieldLabelStyle}>Anchor Text Color</p>
+                            <div style={colorFieldRowStyle}>
+                              <img src="/textcolor.svg" alt="Anchor Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                              <div style={{ flex: 1, position: 'relative' }}>
+                                <div
+                                  style={colorBarStyle(miFormData.textColor)}
+                                  onClick={() => handleColorPickerClick(miTextColorPickerRef)}
+                                />
+                                <input
+                                  type="color"
+                                  ref={miTextColorPickerRef}
+                                  name="textColor"
+                                  value={miFormData.textColor}
+                                  onChange={miHandleColorChange}
+                                  style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                                />
+                              </div>
                             </div>
+                            {miFormErrors.textColor && (
+                              <Text as="p" tone="critical">
+                                {miFormErrors.textColor}
+                              </Text>
+                            )}
                           </div>
                         </Collapsible>
                       </div>
@@ -776,49 +871,55 @@ const AgeVerificationSettings = () => {
                             />
                           </div>
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonLeftBackgroundColor) }}>
-                          <img src="/textcolor.svg" alt="Button Left Background Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Button Left Background Color</p>
-                            <TextField
-                              name="buttonLeftBackgroundColor"
-                              value={miFormData.buttonLeftBackgroundColor}
-                              onChange={(value) => miHandleChange('buttonLeftBackgroundColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miButtonLeftBackgroundColorPickerRef}
-                                  name="buttonLeftBackgroundColor"
-                                  value={miFormData.buttonLeftBackgroundColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.buttonLeftBackgroundColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Button Left Background Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Button Left Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.buttonLeftBackgroundColor)}
+                                onClick={() => handleColorPickerClick(miButtonLeftBackgroundColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miButtonLeftBackgroundColorPickerRef}
+                                name="buttonLeftBackgroundColor"
+                                value={miFormData.buttonLeftBackgroundColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.buttonLeftBackgroundColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.buttonLeftBackgroundColor}
+                            </Text>
+                          )}
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonLeftTextColor) }}>
-                          <img src="/textcolor.svg" alt="Button Left Text Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Button Left Text Color</p>
-                            <TextField
-                              name="buttonLeftTextColor"
-                              value={miFormData.buttonLeftTextColor}
-                              onChange={(value) => miHandleChange('buttonLeftTextColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miButtonLeftTextColorPickerRef}
-                                  name="buttonLeftTextColor"
-                                  value={miFormData.buttonLeftTextColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.buttonLeftTextColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Button Left Text Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Button Left Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.buttonLeftTextColor)}
+                                onClick={() => handleColorPickerClick(miButtonLeftTextColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miButtonLeftTextColorPickerRef}
+                                name="buttonLeftTextColor"
+                                value={miFormData.buttonLeftTextColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.buttonLeftTextColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.buttonLeftTextColor}
+                            </Text>
+                          )}
                         </div>
                         <div style={fieldContainerStyle}>
                           <img src="/right.svg" alt="Button Label Right Icon" style={{ width: '48px', height: '48px' }} />
@@ -833,49 +934,55 @@ const AgeVerificationSettings = () => {
                             />
                           </div>
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonRightBackgroundColor) }}>
-                          <img src="/textcolor.svg" alt="Button Right Background Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Button Right Background Color</p>
-                            <TextField
-                              name="buttonRightBackgroundColor"
-                              value={miFormData.buttonRightBackgroundColor}
-                              onChange={(value) => miHandleChange('buttonRightBackgroundColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miButtonRightBackgroundColorPickerRef}
-                                  name="buttonRightBackgroundColor"
-                                  value={miFormData.buttonRightBackgroundColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.buttonRightBackgroundColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Button Right Background Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Button Right Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.buttonRightBackgroundColor)}
+                                onClick={() => handleColorPickerClick(miButtonRightBackgroundColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miButtonRightBackgroundColorPickerRef}
+                                name="buttonRightBackgroundColor"
+                                value={miFormData.buttonRightBackgroundColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.buttonRightBackgroundColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.buttonRightBackgroundColor}
+                            </Text>
+                          )}
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.buttonRightTextColor) }}>
-                          <img src="/textcolor.svg" alt="Button Right Text Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Button Right Text Color</p>
-                            <TextField
-                              name="buttonRightTextColor"
-                              value={miFormData.buttonRightTextColor}
-                              onChange={(value) => miHandleChange('buttonRightTextColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miButtonRightTextColorPickerRef}
-                                  name="buttonRightTextColor"
-                                  value={miFormData.buttonRightTextColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.buttonRightTextColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Button Right Text Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Button Right Text Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.buttonRightTextColor)}
+                                onClick={() => handleColorPickerClick(miButtonRightTextColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miButtonRightTextColorPickerRef}
+                                name="buttonRightTextColor"
+                                value={miFormData.buttonRightTextColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.buttonRightTextColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.buttonRightTextColor}
+                            </Text>
+                          )}
                         </div>
                       </Collapsible>
                     </div>
@@ -904,49 +1011,55 @@ const AgeVerificationSettings = () => {
                             />
                           </div>
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.headerBackgroundColor) }}>
-                          <img src="/textcolor.svg" alt="Header Background Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Header Background Color</p>
-                            <TextField
-                              name="headerBackgroundColor"
-                              value={miFormData.headerBackgroundColor}
-                              onChange={(value) => miHandleChange('headerBackgroundColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miHeaderBackgroundColorPickerRef}
-                                  name="headerBackgroundColor"
-                                  value={miFormData.headerBackgroundColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.headerBackgroundColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Header Background Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Header Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.headerBackgroundColor)}
+                                onClick={() => handleColorPickerClick(miHeaderBackgroundColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miHeaderBackgroundColorPickerRef}
+                                name="headerBackgroundColor"
+                                value={miFormData.headerBackgroundColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.headerBackgroundColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.headerBackgroundColor}
+                            </Text>
+                          )}
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.bodyBackgroundColor) }}>
-                          <img src="/textcolor.svg" alt="Body Background Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Body Background Color</p>
-                            <TextField
-                              name="bodyBackgroundColor"
-                              value={miFormData.bodyBackgroundColor}
-                              onChange={(value) => miHandleChange('bodyBackgroundColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miBodyBackgroundColorPickerRef}
-                                  name="bodyBackgroundColor"
-                                  value={miFormData.bodyBackgroundColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.bodyBackgroundColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Body Background Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Body Background Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.bodyBackgroundColor)}
+                                onClick={() => handleColorPickerClick(miBodyBackgroundColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miBodyBackgroundColorPickerRef}
+                                name="bodyBackgroundColor"
+                                value={miFormData.bodyBackgroundColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.bodyBackgroundColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.bodyBackgroundColor}
+                            </Text>
+                          )}
                         </div>
                         <div style={fieldContainerStyle}>
                           <img src="/linktext.svg" alt="Content Title Icon" style={{ width: '48px', height: '48px' }} />
@@ -960,27 +1073,30 @@ const AgeVerificationSettings = () => {
                             />
                           </div>
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.contentTitleColor) }}>
-                          <img src="/textcolor.svg" alt="Content Title Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Content Title Color</p>
-                            <TextField
-                              name="contentTitleColor"
-                              value={miFormData.contentTitleColor}
-                              onChange={(value) => miHandleChange('contentTitleColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miContentTitleColorPickerRef}
-                                  name="contentTitleColor"
-                                  value={miFormData.contentTitleColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.contentTitleColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Content Title Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Content Title Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.contentTitleColor)}
+                                onClick={() => handleColorPickerClick(miContentTitleColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miContentTitleColorPickerRef}
+                                name="contentTitleColor"
+                                value={miFormData.contentTitleColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.contentTitleColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.contentTitleColor}
+                            </Text>
+                          )}
                         </div>
                         <div style={fieldContainerStyle}>
                           <img src="/linktext.svg" alt="Content Subtitle Icon" style={{ width: '48px', height: '48px' }} />
@@ -996,27 +1112,30 @@ const AgeVerificationSettings = () => {
                             />
                           </div>
                         </div>
-                        <div style={{ ...fieldContainerStyle, ...miColorFieldStyles(miFormData.contentSubtitleColor) }}>
-                          <img src="/textcolor.svg" alt="Content Subtitle Color Icon" style={{ width: '48px', height: '48px' }} />
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Content Subtitle Color</p>
-                            <TextField
-                              name="contentSubtitleColor"
-                              value={miFormData.contentSubtitleColor}
-                              onChange={(value) => miHandleChange('contentSubtitleColor', value)}
-                              connectedRight={
-                                <input
-                                  type="color"
-                                  ref={miContentSubtitleColorPickerRef}
-                                  name="contentSubtitleColor"
-                                  value={miFormData.contentSubtitleColor}
-                                  onChange={miHandleColorChange}
-                                  style={colorPickerStyle}
-                                />
-                              }
-                              error={miFormErrors.contentSubtitleColor}
-                            />
+                        <div style={colorFieldContainerStyle}>
+                          <p style={fieldLabelStyle}>Content Subtitle Color</p>
+                          <div style={colorFieldRowStyle}>
+                            <img src="/textcolor.svg" alt="Content Subtitle Color Icon" style={{ width: '48px', height: '48px' }} />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                              <div
+                                style={colorBarStyle(miFormData.contentSubtitleColor)}
+                                onClick={() => handleColorPickerClick(miContentSubtitleColorPickerRef)}
+                              />
+                              <input
+                                type="color"
+                                ref={miContentSubtitleColorPickerRef}
+                                name="contentSubtitleColor"
+                                value={miFormData.contentSubtitleColor}
+                                onChange={miHandleColorChange}
+                                style={{ opacity: 0, position: 'absolute', width: '0', height: '0' }}
+                              />
+                            </div>
                           </div>
+                          {miFormErrors.contentSubtitleColor && (
+                            <Text as="p" tone="critical">
+                              {miFormErrors.contentSubtitleColor}
+                            </Text>
+                          )}
                         </div>
                       </Collapsible>
                     </div>
@@ -1095,69 +1214,27 @@ const AgeVerificationSettings = () => {
                         />
                       </div>
                       <Collapsible open={miIconImageOpen} id="icon-image-collapsible">
-                        <div style={fieldContainerStyle}>
-                          <div style={{ flex: '1 1 0%' }}>
-                            <p style={fieldLabelStyle}>Icon Image</p>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <label
-                                htmlFor="iconImage"
-                                style={{
-                                  backgroundColor: '#f4f6f8',
-                                  border: '1px solid #005bd3',
-                                  borderRadius: '4px',
-                                  padding: '6px 12px',
-                                  color: '#005bd3',
-                                  fontSize: '14px',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                Choose File
-                                <input
-                                  type="file"
-                                  name="iconImage"
-                                  id="iconImage"
-                                  accept="image/jpeg,image/png,image/gif"
-                                  onChange={miHandleFileChange}
-                                  style={{ display: 'none' }}
-                                />
-                              </label>
-                              <span style={{ fontSize: '14px', color: '#6d7175' }}>
-                                {miFileName}
-                              </span>
-                              {miFileName !== 'No file chosen' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    miSetFileName('No file chosen');
-                                    document.getElementById('iconImage').value = ''; // Reset the file input
-                                  }}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    padding: '0',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                  }}
-                                >
-                                  <span style={{ fontSize: '16px', color: '#6d7175' }}>×</span>
-                                </button>
-                              )}
-                            </div>
-                            <div style={{ marginTop: '4px', color: '#6d7175', fontSize: '12px' }}>
-                              Choose the icon to upload (JPEG, GIF, PNG).
-                            </div>
-                            {settings && settings.iconImage && (
-                              <div style={{ marginTop: '8px' }}>
-                                <img
-                                  src={settings.iconImage}
-                                  alt="Icon Preview"
-                                  style={{ maxWidth: '200px' }}
-                                />
-                              </div>
-                            )}
+                        <div style={{ padding: '10px' }}>
+                          <p style={fieldLabelStyle}>Icon Image</p>
+                          <CustomFileInput
+                            id="iconImage"
+                            name="iconImage"
+                            accept="image/jpeg,image/png,image/gif"
+                            fileInputRef={miIconImageInputRef}
+                            onChange={miHandleFileChange}
+                          />
+                          <div style={{ marginTop: '4px', color: '#6d7175', fontSize: '12px' }}>
+                            Choose the icon to upload (JPEG, GIF, PNG).
                           </div>
+                          {settings && settings.iconImage && (
+                            <div style={{ marginTop: '8px' }}>
+                              <img
+                                src={settings.iconImage}
+                                alt="Icon Preview"
+                                style={{ maxWidth: '200px' }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </Collapsible>
                     </div>
